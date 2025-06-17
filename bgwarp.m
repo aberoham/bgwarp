@@ -15,6 +15,9 @@
 // Global flag for live incident mode (default is test mode)
 static BOOL liveMode = NO;
 
+// Global setting for reconnect base time in seconds (default is 2 hours = 7200 seconds)
+static int reconnectBaseSeconds = 7200;
+
 // Forward declarations
 static void performInteractiveRecovery(const char *wifiInterface, const char *ethernetInterface);
 static void performNetworkRecovery(void);
@@ -24,8 +27,12 @@ static void showHelp(const char *programName);
 static int executeCommand(const char *command, char *output, size_t outputSize) {
     if (!liveMode) {
         printf("[TEST MODE] Would execute: %s\n", command);
-        // Check if we would have permission to run the command
-        if (strstr(command, "sudo") != NULL || strstr(command, "pkill") != NULL) {
+        // Check if we would have permission to run privileged commands
+        if (strstr(command, "killall") != NULL || 
+            strstr(command, "route") != NULL ||
+            strstr(command, "ifconfig") != NULL ||
+            strstr(command, "ipconfig") != NULL ||
+            strstr(command, "dscacheutil") != NULL) {
             printf("[TEST MODE] Permission check: %s (euid=%u, uid=%u)\n", 
                    geteuid() == 0 ? "PASS" : "FAIL", geteuid(), getuid());
         }
@@ -47,6 +54,17 @@ static int executeCommand(const char *command, char *output, size_t outputSize) 
     return WEXITSTATUS(status);
 }
 
+// Helper function to build privileged commands (with or without sudo based on euid)
+static void buildPrivilegedCommand(char *dest, size_t destSize, const char *command) {
+    if (geteuid() == 0) {
+        // Already running as root, no need for sudo
+        snprintf(dest, destSize, "%s", command);
+    } else {
+        // Not root, need sudo
+        snprintf(dest, destSize, "sudo %s", command);
+    }
+}
+
 // Function to perform WARP cleanup operations
 static void performWarpCleanup(void) {
     char output[MAX_CMD_OUTPUT];
@@ -62,23 +80,18 @@ static void performWarpCleanup(void) {
         printf("[!] WARP disconnect failed (code: %d), continuing anyway...\n", result);
     }
     
-    // Step 2: Delete WARP configuration
-    printf("[*] Deleting WARP configuration...\n");
-    result = executeCommand(WARP_CLI_PATH " delete", output, sizeof(output));
-    if (result == 0) {
-        printf("[+] WARP configuration deleted\n");
-    } else {
-        printf("[!] WARP delete failed (code: %d), continuing...\n", result);
-    }
-    
-    // Step 3: Kill WARP processes
+    // Step 2: Kill WARP processes
     printf("[*] Terminating WARP processes...\n");
-    executeCommand("pkill -9 -f 'Cloudflare WARP'", NULL, 0);
-    executeCommand("pkill -9 -f warp-svc", NULL, 0);
-    executeCommand("pkill -9 -f warp-taskbar", NULL, 0);
+    char cmd[256];
+    buildPrivilegedCommand(cmd, sizeof(cmd), "killall -9 'Cloudflare WARP' 2>/dev/null");
+    executeCommand(cmd, NULL, 0);
+    buildPrivilegedCommand(cmd, sizeof(cmd), "killall -9 warp-svc 2>/dev/null");
+    executeCommand(cmd, NULL, 0);
+    buildPrivilegedCommand(cmd, sizeof(cmd), "killall -9 warp-taskbar 2>/dev/null");
+    executeCommand(cmd, NULL, 0);
     printf("[+] WARP processes terminated\n");
     
-    // Step 4: Flush DNS cache
+    // Step 3: Flush DNS cache
     printf("[*] Flushing DNS cache...\n");
     result = executeCommand("dscacheutil -flushcache", output, sizeof(output));
     if (result == 0) {
@@ -87,14 +100,16 @@ static void performWarpCleanup(void) {
         printf("[!] DNS flush failed (code: %d)\n", result);
     }
     
-    // Step 5: Reset network routes
+    // Step 4: Reset network routes (suppress errors for missing routes)
     printf("[*] Resetting network routes...\n");
-    executeCommand("sudo route -n flush", NULL, 0);
+    buildPrivilegedCommand(cmd, sizeof(cmd), "route -n flush 2>/dev/null");
+    executeCommand(cmd, NULL, 0);
     printf("[+] Network routes reset\n");
     
-    // Step 6: Restart mDNSResponder
+    // Step 5: Restart mDNSResponder
     printf("[*] Restarting mDNSResponder...\n");
-    executeCommand("sudo killall -HUP mDNSResponder", NULL, 0);
+    buildPrivilegedCommand(cmd, sizeof(cmd), "killall -HUP mDNSResponder 2>/dev/null");
+    executeCommand(cmd, NULL, 0);
     printf("[+] mDNSResponder restarted\n");
     
     printf("\n[+] WARP emergency disconnect completed!\n");
@@ -139,8 +154,8 @@ static void detectNetworkInterfaces(char *wifiInterface, size_t wifiSize, char *
 static BOOL canReachGateway(void) {
     char output[MAX_CMD_OUTPUT];
     
-    // Get default gateway
-    if (executeCommand("route -n get default | grep gateway | awk '{print $2}'", output, sizeof(output)) == 0) {
+    // Get default gateway (suppress route errors)
+    if (executeCommand("route -n get default 2>/dev/null | grep gateway | awk '{print $2}'", output, sizeof(output)) == 0) {
         char *gateway = strtok(output, "\n");
         if (gateway && strlen(gateway) > 0) {
             char pingCmd[256];
@@ -176,12 +191,15 @@ static void performNetworkRecovery(void) {
         printf("[*] Cycling Wi-Fi interface %s...\n", wifiInterface);
         
         char cmd[256];
-        snprintf(cmd, sizeof(cmd), "sudo ifconfig %s down", wifiInterface);
+        char baseCmd[256];
+        snprintf(baseCmd, sizeof(baseCmd), "ifconfig %s down", wifiInterface);
+        buildPrivilegedCommand(cmd, sizeof(cmd), baseCmd);
         executeCommand(cmd, NULL, 0);
         
         sleep(2); // Wait for interface to fully shut down
         
-        snprintf(cmd, sizeof(cmd), "sudo ifconfig %s up", wifiInterface);
+        snprintf(baseCmd, sizeof(baseCmd), "ifconfig %s up", wifiInterface);
+        buildPrivilegedCommand(cmd, sizeof(cmd), baseCmd);
         executeCommand(cmd, NULL, 0);
         
         printf("[*] Waiting for Wi-Fi to reconnect...\n");
@@ -198,12 +216,15 @@ static void performNetworkRecovery(void) {
         printf("[*] Cycling Ethernet interface %s...\n", ethernetInterface);
         
         char cmd[256];
-        snprintf(cmd, sizeof(cmd), "sudo ifconfig %s down", ethernetInterface);
+        char baseCmd[256];
+        snprintf(baseCmd, sizeof(baseCmd), "ifconfig %s down", ethernetInterface);
+        buildPrivilegedCommand(cmd, sizeof(cmd), baseCmd);
         executeCommand(cmd, NULL, 0);
         
         sleep(1);
         
-        snprintf(cmd, sizeof(cmd), "sudo ifconfig %s up", ethernetInterface);
+        snprintf(baseCmd, sizeof(baseCmd), "ifconfig %s up", ethernetInterface);
+        buildPrivilegedCommand(cmd, sizeof(cmd), baseCmd);
         executeCommand(cmd, NULL, 0);
         
         sleep(3); // Ethernet usually connects faster
@@ -270,19 +291,25 @@ static void performInteractiveRecovery(const char *wifiInterface, const char *et
     printf("[*] Performing comprehensive network reset...\n");
     
     // Reset all network services
-    executeCommand("sudo dscacheutil -flushcache", NULL, 0);
-    executeCommand("sudo killall -HUP mDNSResponder", NULL, 0);
-    executeCommand("sudo killall -HUP configd", NULL, 0);
+    char cmd[256];
+    buildPrivilegedCommand(cmd, sizeof(cmd), "dscacheutil -flushcache");
+    executeCommand(cmd, NULL, 0);
+    buildPrivilegedCommand(cmd, sizeof(cmd), "killall -HUP mDNSResponder");
+    executeCommand(cmd, NULL, 0);
+    buildPrivilegedCommand(cmd, sizeof(cmd), "killall -HUP configd");
+    executeCommand(cmd, NULL, 0);
     
     // Clear DHCP leases - use actual interface names if available
     if (strlen(wifiInterface) > 0) {
-        char cmd[256];
-        snprintf(cmd, sizeof(cmd), "sudo ipconfig set %s NONE", wifiInterface);
+        char baseCmd[256];
+        snprintf(baseCmd, sizeof(baseCmd), "ipconfig set %s NONE", wifiInterface);
+        buildPrivilegedCommand(cmd, sizeof(cmd), baseCmd);
         executeCommand(cmd, NULL, 0);
     }
     if (strlen(ethernetInterface) > 0) {
-        char cmd[256];
-        snprintf(cmd, sizeof(cmd), "sudo ipconfig set %s NONE", ethernetInterface);
+        char baseCmd[256];
+        snprintf(baseCmd, sizeof(baseCmd), "ipconfig set %s NONE", ethernetInterface);
+        buildPrivilegedCommand(cmd, sizeof(cmd), baseCmd);
         executeCommand(cmd, NULL, 0);
     }
     
@@ -290,13 +317,15 @@ static void performInteractiveRecovery(const char *wifiInterface, const char *et
     
     // Re-enable DHCP
     if (strlen(wifiInterface) > 0) {
-        char cmd[256];
-        snprintf(cmd, sizeof(cmd), "sudo ipconfig set %s DHCP", wifiInterface);
+        char baseCmd[256];
+        snprintf(baseCmd, sizeof(baseCmd), "ipconfig set %s DHCP", wifiInterface);
+        buildPrivilegedCommand(cmd, sizeof(cmd), baseCmd);
         executeCommand(cmd, NULL, 0);
     }
     if (strlen(ethernetInterface) > 0) {
-        char cmd[256];
-        snprintf(cmd, sizeof(cmd), "sudo ipconfig set %s DHCP", ethernetInterface);
+        char baseCmd[256];
+        snprintf(baseCmd, sizeof(baseCmd), "ipconfig set %s DHCP", ethernetInterface);
+        buildPrivilegedCommand(cmd, sizeof(cmd), baseCmd);
         executeCommand(cmd, NULL, 0);
     }
     
@@ -425,10 +454,10 @@ static void performTestMode(void) {
     printf("\n[TEST] Binary Availability:\n");
     const char *binaries[] = {
         WARP_CLI_PATH,
-        "/usr/bin/pkill",
+        "/usr/bin/killall",
         "/usr/bin/dscacheutil",
         "/sbin/route",
-        "/usr/bin/killall"
+        "/sbin/ifconfig"
     };
     
     for (int i = 0; i < 5; i++) {
@@ -450,6 +479,9 @@ static void showHelp(const char *programName) {
     printf("\n");
     printf("Options:\n");
     printf("  --liveincident    Execute in live mode (destructive actions)\n");
+    printf("  --reconnect <seconds> Set reconnect base time in seconds (60-43200)\n");
+    printf("                        Default: 7200 (2 hours)\n");
+    printf("                        Actual reconnect: random between base and 2x base\n");
     printf("  --help, -h        Print this help message\n");
     printf("\n");
     printf("Description:\n");
@@ -462,7 +494,8 @@ static void showHelp(const char *programName) {
     printf("  - Safe by default: Runs in test mode unless --liveincident is specified\n");
     printf("  - Touch ID authentication required (with password fallback)\n");
     printf("  - Automatic network recovery after WARP disconnection\n");
-    printf("  - Auto-reconnection to WARP after 2-4 hours (randomized)\n");
+    printf("  - Auto-reconnection to WARP after base time (randomized between base and 2x base)\n");
+    printf("  - Automatic restart of WARP GUI application after reconnection\n");
     printf("  - Interactive recovery mode if automatic recovery fails\n");
     printf("\n");
     printf("Test Mode (default):\n");
@@ -475,7 +508,7 @@ static void showHelp(const char *programName) {
     printf("  - Terminate all WARP processes\n");
     printf("  - Reset network routes and DNS\n");
     printf("  - Attempt automatic network recovery\n");
-    printf("  - Schedule WARP reconnection in 2-4 hours\n");
+    printf("  - Schedule WARP reconnection (configurable with --reconnect)\n");
     printf("\n");
     printf("Network Recovery:\n");
     printf("  After disconnecting WARP, the tool will:\n");
@@ -491,6 +524,21 @@ static void showHelp(const char *programName) {
     printf("Example:\n");
     printf("  %s                  # Run in test mode\n", programName);
     printf("  %s --liveincident   # Run in live mode (use during outages)\n", programName);
+    printf("  %s --liveincident --reconnect 300  # 5 min base reconnect time\n", programName);
+    printf("\n");
+    printf("Debugging:\n");
+    printf("  View bgwarp logs:\n");
+    printf("    log show --predicate 'subsystem == \"bgwarp\"' --last 1h\n");
+    printf("    log show --predicate 'process == \"logger\" AND eventMessage CONTAINS \"bgwarp\"' --last 1h\n");
+    printf("\n");
+    printf("  List active recovery jobs:\n");
+    printf("    launchctl list | grep bgwarp.recovery\n");
+    printf("\n");
+    printf("  View recovery job details:\n");
+    printf("    launchctl print gui/$(id -u)/com.bgwarp.recovery.PID\n");
+    printf("\n");
+    printf("  Manually cancel recovery:\n");
+    printf("    launchctl unload /tmp/com.bgwarp.recovery.*.plist\n");
     printf("\n");
 }
 
@@ -504,11 +552,19 @@ int main(int argc, const char * argv[]) {
             }
         }
         
-        // Check for live incident flag (default is test mode)
+        // Parse command line arguments
         for (int i = 1; i < argc; i++) {
             if (strcmp(argv[i], "--liveincident") == 0) {
                 liveMode = YES;
-                break;
+            } else if (strcmp(argv[i], "--reconnect") == 0 && i + 1 < argc) {
+                int seconds = atoi(argv[i + 1]);
+                if (seconds < 60 || seconds > 43200) {
+                    fprintf(stderr, "Error: --reconnect value must be between 60 and 43200 seconds\n");
+                    fprintf(stderr, "       You specified: %d seconds\n", seconds);
+                    return 1;
+                }
+                reconnectBaseSeconds = seconds;
+                i++; // Skip the next argument since we consumed it
             }
         }
         
@@ -578,12 +634,28 @@ int main(int argc, const char * argv[]) {
                      username);
             system(logCmd);
             
-            // Schedule auto-recovery with random delay (2-4 hours)
-            int randomDelay = 7200 + (int)arc4random_uniform(7201); // 7200-14400 seconds
+            // Schedule auto-recovery with random delay between base and 2x base
+            int randomDelay = reconnectBaseSeconds + (int)arc4random_uniform((uint32_t)(reconnectBaseSeconds + 1));
             int hours = randomDelay / 3600;
             int minutes = (randomDelay % 3600) / 60;
+            int seconds = randomDelay % 60;
             
-            printf("\n[+] Auto-recovery scheduled in %d hours %d minutes\n", hours, minutes);
+            // Enhanced logging for debugging
+            printf("\n[+] Auto-recovery scheduling details:\n");
+            printf("    Base time: %d seconds\n", reconnectBaseSeconds);
+            printf("    Randomized delay: %d seconds\n", randomDelay);
+            printf("    Will reconnect WARP and restart GUI application\n");
+            printf("    Scheduled in: ");
+            if (hours > 0) {
+                printf("%d hour%s ", hours, hours == 1 ? "" : "s");
+            }
+            if (minutes > 0) {
+                printf("%d minute%s ", minutes, minutes == 1 ? "" : "s");
+            }
+            if (seconds > 0 || (hours == 0 && minutes == 0)) {
+                printf("%d second%s", seconds, seconds == 1 ? "" : "s");
+            }
+            printf("\n");
             
             // Create launchd plist for recovery
             char plistPath[256];
@@ -601,8 +673,8 @@ int main(int argc, const char * argv[]) {
                 fprintf(plist, "    <array>\n");
                 fprintf(plist, "        <string>/bin/sh</string>\n");
                 fprintf(plist, "        <string>-c</string>\n");
-                fprintf(plist, "        <string>sleep %d; %s connect; logger -t bgwarp 'Auto-recovery: attempting to reconnect WARP'; launchctl unload %s</string>\n", 
-                        randomDelay, WARP_CLI_PATH, plistPath);
+                fprintf(plist, "        <string>sleep %d; logger -t bgwarp 'Auto-recovery: starting WARP reconnect after %d seconds'; %s connect 2>&1 | logger -t bgwarp; logger -t bgwarp 'Auto-recovery: warp-cli connect returned $?'; sleep 2; open -a 'Cloudflare WARP' 2>&1 | logger -t bgwarp; logger -t bgwarp 'Auto-recovery: launched WARP GUI'; launchctl unload %s</string>\n", 
+                        randomDelay, randomDelay, WARP_CLI_PATH, plistPath);
                 fprintf(plist, "    </array>\n");
                 fprintf(plist, "    <key>RunAtLoad</key>\n");
                 fprintf(plist, "    <true/>\n");
@@ -618,12 +690,20 @@ int main(int argc, const char * argv[]) {
                 system(loadCmd);
                 
                 snprintf(logCmd, sizeof(logCmd), 
-                         "logger -t bgwarp 'Auto-recovery scheduled for %d seconds (%dh %dm) from now'", 
-                         randomDelay, hours, minutes);
+                         "logger -t bgwarp 'Auto-recovery scheduled: base=%ds, actual=%ds (%dh %dm %ds), pid=%d'", 
+                         reconnectBaseSeconds, randomDelay, hours, minutes, seconds, getpid());
                 system(logCmd);
+                
+                printf("    LaunchD job: com.bgwarp.recovery.%d\n", getpid());
+                printf("    Plist location: %s\n", plistPath);
             }
         } else {
             printf("\n[TEST] Test mode completed. No actual commands were executed.\n");
+            if (reconnectBaseSeconds != 7200) {
+                printf("[TEST] Would use custom reconnect base time: %d seconds\n", reconnectBaseSeconds);
+                int testRandomDelay = reconnectBaseSeconds + (int)arc4random_uniform((uint32_t)(reconnectBaseSeconds + 1));
+                printf("[TEST] Example randomized delay would be: %d seconds\n", testRandomDelay);
+            }
             printf("\nTo execute in a live incident, run with: --liveincident\n");
         }
         
