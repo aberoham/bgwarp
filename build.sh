@@ -17,6 +17,7 @@ fi
 clang -framework Foundation \
       -framework LocalAuthentication \
       -framework Security \
+      -framework SystemConfiguration \
       -fobjc-arc \
       -O2 \
       -Weverything \

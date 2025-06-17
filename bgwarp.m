@@ -1,5 +1,6 @@
 #import <Foundation/Foundation.h>
 #import <LocalAuthentication/LocalAuthentication.h>
+#import <SystemConfiguration/SystemConfiguration.h>
 #import <unistd.h>
 #import <sys/types.h>
 #import <signal.h>
@@ -8,9 +9,19 @@
 #import <string.h>
 #import <errno.h>
 #import <sys/stat.h>
+#import <ctype.h>
+#import <syslog.h>
+#import <sys/wait.h>
+#import <time.h>
+#import <fcntl.h>
+#import <sys/resource.h>
+#import <pwd.h>
 
 #define WARP_CLI_PATH "/usr/local/bin/warp-cli"
 #define MAX_CMD_OUTPUT 4096
+#define MAX_AUTH_ATTEMPTS 3
+#define AUTH_LOCKOUT_SECONDS 60
+#define AUTH_BACKOFF_SECONDS 5
 
 // Global flag for live incident mode (default is test mode)
 static BOOL liveMode = NO;
@@ -18,10 +29,22 @@ static BOOL liveMode = NO;
 // Global setting for reconnect base time in seconds (default is 2 hours = 7200 seconds)
 static int reconnectBaseSeconds = 7200;
 
+// Rate limiting state
+static int authAttempts = 0;
+static time_t lastAttemptTime = 0;
+static time_t lockoutEndTime = 0;
+
 // Forward declarations
 static void performInteractiveRecovery(const char *wifiInterface, const char *ethernetInterface);
 static void performNetworkRecovery(void);
 static void showHelp(const char *programName);
+static void safeLogMessage(const char *format, ...);
+static BOOL checkRateLimit(void);
+static void recordAuthAttempt(BOOL success);
+static BOOL isConsoleUser(void);
+static void logAuthAttempt(BOOL success, const char *reason);
+static void sanitizeEnvironment(void);
+static void fixFileDescriptors(void);
 
 // Function to execute shell commands and capture output
 static int executeCommand(const char *command, char *output, size_t outputSize) {
@@ -350,8 +373,178 @@ static void performInteractiveRecovery(const char *wifiInterface, const char *et
     }
 }
 
+// Function to check rate limiting
+static BOOL checkRateLimit(void) {
+    time_t now = time(NULL);
+    
+    // Check if we're in lockout period
+    if (lockoutEndTime > 0 && now < lockoutEndTime) {
+        time_t remaining = lockoutEndTime - now;
+        fprintf(stderr, "Too many failed authentication attempts.\n");
+        fprintf(stderr, "Please wait %ld seconds before trying again.\n", (long)remaining);
+        safeLogMessage("Rate limit: Authentication blocked for %ld more seconds (uid=%u)", 
+                      (long)remaining, getuid());
+        return NO;
+    }
+    
+    // Reset attempt counter if enough time has passed since last attempt
+    if (lastAttemptTime > 0 && (now - lastAttemptTime) > AUTH_LOCKOUT_SECONDS) {
+        authAttempts = 0;
+        lockoutEndTime = 0;
+    }
+    
+    // Check if we've exceeded max attempts
+    if (authAttempts >= MAX_AUTH_ATTEMPTS) {
+        lockoutEndTime = now + AUTH_LOCKOUT_SECONDS;
+        fprintf(stderr, "Maximum authentication attempts exceeded.\n");
+        fprintf(stderr, "Account locked for %d seconds.\n", AUTH_LOCKOUT_SECONDS);
+        safeLogMessage("Rate limit: Maximum attempts (%d) exceeded, locking for %d seconds (uid=%u)", 
+                      MAX_AUTH_ATTEMPTS, AUTH_LOCKOUT_SECONDS, getuid());
+        return NO;
+    }
+    
+    // Add exponential backoff for multiple attempts
+    if (authAttempts > 0) {
+        int backoffTime = AUTH_BACKOFF_SECONDS * authAttempts;
+        time_t timeSinceLastAttempt = now - lastAttemptTime;
+        
+        if (timeSinceLastAttempt < backoffTime) {
+            time_t waitTime = backoffTime - timeSinceLastAttempt;
+            fprintf(stderr, "Please wait %ld seconds before next attempt.\n", (long)waitTime);
+            return NO;
+        }
+    }
+    
+    return YES;
+}
+
+// Enhanced audit logging function
+static void logAuthAttempt(BOOL success, const char *reason) {
+    char *tty = ttyname(STDIN_FILENO);
+    pid_t ppid = getppid();
+    char *username = getenv("USER");
+    if (!username) {
+        struct passwd *pw = getpwuid(getuid());
+        if (pw != NULL) {
+            username = pw->pw_name;
+        } else {
+            username = "unknown";
+        }
+    }
+    
+    // Use syslog for critical security events
+    openlog("bgwarp", LOG_PID | LOG_NDELAY, LOG_AUTH);
+    syslog(success ? LOG_INFO : LOG_WARNING,
+           "auth %s for user %s (uid=%u) on %s, ppid=%d: %s",
+           success ? "success" : "failure",
+           username, getuid(),
+           tty ? tty : "unknown",
+           ppid,
+           reason ? reason : "");
+    closelog();
+    
+    // Also log via safeLogMessage for consistency
+    safeLogMessage("Authentication %s: user=%s uid=%u tty=%s ppid=%d reason=%s",
+                  success ? "success" : "failure",
+                  username, getuid(),
+                  tty ? tty : "unknown",
+                  ppid,
+                  reason ? reason : "none");
+}
+
+// Function to record authentication attempt
+static void recordAuthAttempt(BOOL success) {
+    time_t now = time(NULL);
+    char reason[256];
+    
+    if (success) {
+        // Log success with current attempt count
+        snprintf(reason, sizeof(reason), "successful after %d attempt(s)", authAttempts + 1);
+        logAuthAttempt(YES, reason);
+        
+        // Reset on successful authentication
+        authAttempts = 0;
+        lockoutEndTime = 0;
+        lastAttemptTime = 0;
+    } else {
+        authAttempts++;
+        lastAttemptTime = now;
+        
+        int remainingAttempts = MAX_AUTH_ATTEMPTS - authAttempts;
+        if (remainingAttempts > 0) {
+            fprintf(stderr, "Authentication failed. %d attempt(s) remaining.\n", remainingAttempts);
+            snprintf(reason, sizeof(reason), "attempt %d of %d", authAttempts, MAX_AUTH_ATTEMPTS);
+        } else {
+            snprintf(reason, sizeof(reason), "max attempts exceeded, locked for %d seconds", AUTH_LOCKOUT_SECONDS);
+        }
+        logAuthAttempt(NO, reason);
+    }
+}
+
+// Function to check if user is at console (not SSH/remote)
+static BOOL isConsoleUser(void) {
+    // Get the current console user
+    CFStringRef consoleUser = SCDynamicStoreCopyConsoleUser(NULL, NULL, NULL);
+    if (consoleUser == NULL) {
+        safeLogMessage("Warning: Could not determine console user");
+        return NO;
+    }
+    
+    // Get current username
+    char *currentUser = getenv("USER");
+    if (currentUser == NULL) {
+        struct passwd *pw = getpwuid(getuid());
+        if (pw != NULL) {
+            currentUser = pw->pw_name;
+        }
+    }
+    
+    if (currentUser == NULL) {
+        CFRelease(consoleUser);
+        safeLogMessage("Warning: Could not determine current user");
+        return NO;
+    }
+    
+    // Convert to CFString for comparison
+    CFStringRef currentUserCF = CFStringCreateWithCString(NULL, currentUser,
+                                                         kCFStringEncodingUTF8);
+    if (currentUserCF == NULL) {
+        CFRelease(consoleUser);
+        return NO;
+    }
+    
+    // Compare console user with current user
+    BOOL isConsole = CFStringCompare(consoleUser, currentUserCF, 0) == kCFCompareEqualTo;
+    
+    // Also check if we have a TTY (additional check for SSH)
+    char *tty = ttyname(STDIN_FILENO);
+    BOOL hasTTY = (tty != NULL);
+    
+    CFRelease(consoleUser);
+    CFRelease(currentUserCF);
+    
+    if (!isConsole) {
+        safeLogMessage("Security: User %s is not at console (remote/SSH session)", currentUser);
+    } else if (!hasTTY) {
+        safeLogMessage("Security: User %s has no TTY", currentUser);
+    }
+    
+    return isConsole && hasTTY;
+}
+
 // Function to authenticate with Touch ID
 static BOOL authenticateWithTouchID(void) {
+    sigset_t mask, omask;
+    
+    // Block critical signals during authentication to prevent race conditions
+    sigemptyset(&mask);
+    sigaddset(&mask, SIGINT);
+    sigaddset(&mask, SIGQUIT);
+    sigaddset(&mask, SIGTERM);
+    sigaddset(&mask, SIGALRM);
+    sigaddset(&mask, SIGHUP);
+    sigprocmask(SIG_BLOCK, &mask, &omask);
+    
     // Save current effective UID/GID
     uid_t saved_euid = geteuid();
     gid_t saved_egid = getegid();
@@ -360,8 +553,18 @@ static BOOL authenticateWithTouchID(void) {
     uid_t real_uid = getuid();
     gid_t real_gid = getgid();
     
-    if (seteuid(real_uid) != 0 || setegid(real_gid) != 0) {
-        fprintf(stderr, "Failed to drop privileges for authentication\n");
+    // Use seteuid/setegid with proper error handling and atomicity
+    if (setegid(real_gid) != 0) {
+        fprintf(stderr, "Failed to drop group privileges for authentication\n");
+        sigprocmask(SIG_SETMASK, &omask, NULL);
+        return NO;
+    }
+    
+    if (seteuid(real_uid) != 0) {
+        // Attempt to restore gid on failure
+        setegid(saved_egid);
+        fprintf(stderr, "Failed to drop user privileges for authentication\n");
+        sigprocmask(SIG_SETMASK, &omask, NULL);
         return NO;
     }
     
@@ -371,6 +574,7 @@ static BOOL authenticateWithTouchID(void) {
     // Check if Touch ID is available
     if (![context canEvaluatePolicy:LAPolicyDeviceOwnerAuthenticationWithBiometrics error:&error]) {
         NSLog(@"Touch ID not available: %@", error.localizedDescription);
+        logAuthAttempt(NO, "Touch ID not available");
         
         // Fall back to password authentication if Touch ID is not available
         if ([context canEvaluatePolicy:LAPolicyDeviceOwnerAuthentication error:&error]) {
@@ -386,26 +590,53 @@ static BOOL authenticateWithTouchID(void) {
                     authenticated = YES;
                 } else {
                     NSLog(@"Authentication failed: %@", authError.localizedDescription);
+                    const char *errorStr = [authError.localizedDescription UTF8String];
+                    logAuthAttempt(NO, errorStr ? errorStr : "password authentication failed");
                 }
                 dispatch_semaphore_signal(semaphore);
             }];
             
-            dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
-            
-            // Restore root privileges
-            if (seteuid(saved_euid) != 0 || setegid(saved_egid) != 0) {
-                fprintf(stderr, "Failed to restore privileges after authentication\n");
+            // 30-second timeout for authentication
+            dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, 30 * NSEC_PER_SEC);
+            if (dispatch_semaphore_wait(semaphore, timeout) != 0) {
+                NSLog(@"Authentication timeout after 30 seconds");
+                authenticated = NO;
+                // Restore privileges before returning (order matters: uid first, then gid)
+                if (seteuid(saved_euid) != 0) {
+                    fprintf(stderr, "CRITICAL: Failed to restore uid after timeout\n");
+                }
+                if (setegid(saved_egid) != 0) {
+                    fprintf(stderr, "CRITICAL: Failed to restore gid after timeout\n");
+                }
+                sigprocmask(SIG_SETMASK, &omask, NULL);
                 return NO;
             }
             
+            // Restore root privileges (order matters: uid first, then gid)
+            if (seteuid(saved_euid) != 0) {
+                fprintf(stderr, "CRITICAL: Failed to restore effective uid\n");
+                sigprocmask(SIG_SETMASK, &omask, NULL);
+                return NO;
+            }
+            if (setegid(saved_egid) != 0) {
+                fprintf(stderr, "CRITICAL: Failed to restore effective gid\n");
+                sigprocmask(SIG_SETMASK, &omask, NULL);
+                return NO;
+            }
+            
+            sigprocmask(SIG_SETMASK, &omask, NULL); // Restore signals
             return authenticated;
         }
         
-        // Restore root privileges even in error case
-        if (seteuid(saved_euid) != 0 || setegid(saved_egid) != 0) {
-            fprintf(stderr, "Failed to restore privileges after authentication\n");
+        // Restore root privileges even in error case (order matters)
+        if (seteuid(saved_euid) != 0) {
+            fprintf(stderr, "CRITICAL: Failed to restore effective uid in error case\n");
+        }
+        if (setegid(saved_egid) != 0) {
+            fprintf(stderr, "CRITICAL: Failed to restore effective gid in error case\n");
         }
         
+        sigprocmask(SIG_SETMASK, &omask, NULL); // Restore signals
         return NO;
     }
     
@@ -420,18 +651,41 @@ static BOOL authenticateWithTouchID(void) {
             authenticated = YES;
         } else {
             NSLog(@"Touch ID authentication failed: %@", authError.localizedDescription);
+            const char *errorStr = [authError.localizedDescription UTF8String];
+            logAuthAttempt(NO, errorStr ? errorStr : "Touch ID authentication failed");
         }
         dispatch_semaphore_signal(semaphore);
     }];
     
-    dispatch_semaphore_wait(semaphore, DISPATCH_TIME_FOREVER);
-    
-    // Restore root privileges
-    if (seteuid(saved_euid) != 0 || setegid(saved_egid) != 0) {
-        fprintf(stderr, "Failed to restore privileges after authentication\n");
+    // 30-second timeout for authentication
+    dispatch_time_t timeout = dispatch_time(DISPATCH_TIME_NOW, 30 * NSEC_PER_SEC);
+    if (dispatch_semaphore_wait(semaphore, timeout) != 0) {
+        NSLog(@"Touch ID authentication timeout after 30 seconds");
+        authenticated = NO;
+        // Restore privileges before returning (order matters)
+        if (seteuid(saved_euid) != 0) {
+            fprintf(stderr, "CRITICAL: Failed to restore uid after Touch ID timeout\n");
+        }
+        if (setegid(saved_egid) != 0) {
+            fprintf(stderr, "CRITICAL: Failed to restore gid after Touch ID timeout\n");
+        }
+        sigprocmask(SIG_SETMASK, &omask, NULL);
         return NO;
     }
     
+    // Restore root privileges (order matters: uid first, then gid)
+    if (seteuid(saved_euid) != 0) {
+        fprintf(stderr, "CRITICAL: Failed to restore effective uid after Touch ID\n");
+        sigprocmask(SIG_SETMASK, &omask, NULL);
+        return NO;
+    }
+    if (setegid(saved_egid) != 0) {
+        fprintf(stderr, "CRITICAL: Failed to restore effective gid after Touch ID\n");
+        sigprocmask(SIG_SETMASK, &omask, NULL);
+        return NO;
+    }
+    
+    sigprocmask(SIG_SETMASK, &omask, NULL); // Restore signals
     return authenticated;
 }
 
@@ -542,8 +796,134 @@ static void showHelp(const char *programName) {
     printf("\n");
 }
 
+// Safe logging function that prevents command injection
+static void safeLogMessage(const char *format, ...) {
+    va_list args;
+    char message[1024];
+    char safe_message[1024];
+    
+    // Format the message
+    va_start(args, format);
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Wformat-nonliteral"
+    vsnprintf(message, sizeof(message), format, args);
+#pragma clang diagnostic pop
+    va_end(args);
+    
+    // Sanitize the message - remove any shell metacharacters
+    size_t j = 0;
+    for (size_t i = 0; i < strlen(message) && j < sizeof(safe_message) - 1; i++) {
+        char c = message[i];
+        // Allow printable characters except shell metacharacters
+        if (isprint(c) && c != '\'' && c != '"' && c != '`' && c != '$' && 
+            c != '\\' && c != ';' && c != '&' && c != '|' && c != '<' && 
+            c != '>' && c != '!' && c != '\n' && c != '\r') {
+            safe_message[j++] = c;
+        } else if (isspace(c)) {
+            safe_message[j++] = ' '; // Replace any whitespace with space
+        } else {
+            safe_message[j++] = '?'; // Replace dangerous chars with ?
+        }
+    }
+    safe_message[j] = '\0';
+    
+    // Use syslog directly instead of system() with logger
+    openlog("bgwarp", LOG_PID | LOG_NDELAY, LOG_USER);
+    syslog(LOG_INFO, "%s", safe_message);
+    closelog();
+    
+    // Also fork and exec logger for compatibility
+    pid_t pid = fork();
+    if (pid == 0) {
+        // Child process
+        char *logger_args[] = {"/usr/bin/logger", "-t", "bgwarp", safe_message, NULL};
+        execve("/usr/bin/logger", logger_args, NULL);
+        _exit(1); // Exit if execve fails
+    } else if (pid > 0) {
+        // Parent process - wait for child to complete
+        int status;
+        waitpid(pid, &status, 0);
+    }
+}
+
+// Function to ensure standard file descriptors are open
+static void fixFileDescriptors(void) {
+    int fd;
+    
+    // Check and fix stdin, stdout, stderr (fd 0, 1, 2)
+    for (int i = 0; i < 3; i++) {
+        // Test if descriptor is valid
+        if (fcntl(i, F_GETFL) == -1 && errno == EBADF) {
+            // Descriptor is not open, open /dev/null
+            if (i == 0) {
+                fd = open("/dev/null", O_RDONLY);
+            } else {
+                fd = open("/dev/null", O_WRONLY);
+            }
+            
+            if (fd != i) {
+                // If we didn't get the expected descriptor, dup2 it
+                if (fd >= 0) {
+                    dup2(fd, i);
+                    close(fd);
+                } else {
+                    // Failed to open /dev/null - this is bad but continue
+                    safeLogMessage("Security: Failed to fix file descriptor %d", i);
+                }
+            }
+        }
+    }
+}
+
+// Function to sanitize environment variables
+static void sanitizeEnvironment(void) {
+    // Remove dangerous environment variables that could affect execution
+    const char *dangerous[] = {
+        "LD_PRELOAD",           // Linux dynamic library injection
+        "LD_LIBRARY_PATH",      // Linux library path override
+        "DYLD_INSERT_LIBRARIES", // macOS dynamic library injection
+        "DYLD_LIBRARY_PATH",    // macOS library path override
+        "DYLD_FRAMEWORK_PATH",  // macOS framework path override
+        "DYLD_FALLBACK_LIBRARY_PATH",
+        "DYLD_FALLBACK_FRAMEWORK_PATH",
+        "DYLD_ROOT_PATH",
+        "IFS",                  // Shell field separator
+        "PATH_LOCALE",
+        "NLSPATH",              // Message catalog path
+        "CDPATH",               // cd search path
+        "ENV",                  // Shell startup file
+        "BASH_ENV",             // Bash startup file
+        NULL
+    };
+    
+    for (int i = 0; dangerous[i]; i++) {
+        if (getenv(dangerous[i]) != NULL) {
+            safeLogMessage("Security: Removing dangerous environment variable: %s", dangerous[i]);
+            unsetenv(dangerous[i]);
+        }
+    }
+    
+    // Ensure PATH is set to a safe default if not present
+    if (getenv("PATH") == NULL) {
+        setenv("PATH", "/usr/bin:/bin:/usr/sbin:/sbin", 1);
+        safeLogMessage("Security: Set PATH to safe default");
+    }
+}
+
 int main(int argc, const char * argv[]) {
     @autoreleasepool {
+        // Disable core dumps to prevent sensitive data leakage
+        struct rlimit rl = {0, 0};
+        if (setrlimit(RLIMIT_CORE, &rl) != 0) {
+            fprintf(stderr, "Warning: Failed to disable core dumps\n");
+        }
+        
+        // Fix file descriptors first to ensure proper I/O
+        fixFileDescriptors();
+        
+        // Sanitize environment variables first for security
+        sanitizeEnvironment();
+        
         // Check for help flag first
         for (int i = 1; i < argc; i++) {
             if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
@@ -599,10 +979,26 @@ int main(int argc, const char * argv[]) {
             printf("\n");
         }
         
+        // Check if user is at console (not SSH/remote)
+        if (!isConsoleUser()) {
+            fprintf(stderr, "[!] Access denied: This tool can only be used from the physical console.\n");
+            fprintf(stderr, "    SSH and remote sessions are not permitted for security reasons.\n");
+            safeLogMessage("Access denied: Remote session attempted by uid=%u", getuid());
+            return 1;
+        }
+        
+        // Check rate limiting before authentication
+        if (!checkRateLimit()) {
+            return 1;
+        }
+        
         // Require Touch ID authentication in both modes
         printf("[*] Authenticating with Touch ID...\n");
         
-        if (!authenticateWithTouchID()) {
+        BOOL authenticated = authenticateWithTouchID();
+        recordAuthAttempt(authenticated);
+        
+        if (!authenticated) {
             fprintf(stderr, "[!] Authentication failed. Access denied.\n");
             return 1;
         }
@@ -618,21 +1014,15 @@ int main(int argc, const char * argv[]) {
         char *username = getenv("USER");
         if (!username) username = "unknown";
         
-        char logCmd[512];
-        snprintf(logCmd, sizeof(logCmd), 
-                 "logger -t bgwarp 'Emergency WARP disconnect initiated by user %s (uid=%u)'", 
-                 username, getuid());
-        system(logCmd);
+        safeLogMessage("Emergency WARP disconnect initiated by user %s (uid=%u)", 
+                      username, getuid());
         
         // Perform the WARP cleanup
         performWarpCleanup();
         
         if (liveMode) {
             // Log completion
-            snprintf(logCmd, sizeof(logCmd), 
-                     "logger -t bgwarp 'Emergency WARP disconnect completed for user %s'", 
-                     username);
-            system(logCmd);
+            safeLogMessage("Emergency WARP disconnect completed for user %s", username);
             
             // Schedule auto-recovery with random delay between base and 2x base
             int randomDelay = reconnectBaseSeconds + (int)arc4random_uniform((uint32_t)(reconnectBaseSeconds + 1));
@@ -689,10 +1079,8 @@ int main(int argc, const char * argv[]) {
                 snprintf(loadCmd, sizeof(loadCmd), "launchctl load %s 2>/dev/null", plistPath);
                 system(loadCmd);
                 
-                snprintf(logCmd, sizeof(logCmd), 
-                         "logger -t bgwarp 'Auto-recovery scheduled: base=%ds, actual=%ds (%dh %dm %ds), pid=%d'", 
-                         reconnectBaseSeconds, randomDelay, hours, minutes, seconds, getpid());
-                system(logCmd);
+                safeLogMessage("Auto-recovery scheduled: base=%ds, actual=%ds (%dh %dm %ds), pid=%d", 
+                              reconnectBaseSeconds, randomDelay, hours, minutes, seconds, getpid());
                 
                 printf("    LaunchD job: com.bgwarp.recovery.%d\n", getpid());
                 printf("    Plist location: %s\n", plistPath);
