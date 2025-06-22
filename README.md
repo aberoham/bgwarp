@@ -32,10 +32,21 @@ This tool is designed for advanced incident responders with physical device acce
 
 ## Requirements
 
-- macOS 10.x or later
+- macOS 10.x or later (Intel or Apple Silicon)
 - Cloudflare WARP client installed
 - MDM or administrator privileges for installation
 - Physical access to device (Touch ID or passwd via live terminal)
+
+## Architecture Support
+
+`bgwarp` is distributed as a universal binary that runs natively on:
+- Intel-based Macs (x86_64)
+- Apple Silicon Macs (arm64/M1/M2/M3)
+
+Pre-built releases include:
+- **Universal packages** - Recommended for most deployments (works on all Mac architectures)
+- **Architecture-specific packages** - Available for environments requiring single-architecture binaries
+- **Raw binaries** - For manual installation or custom deployment workflows
 
 ## Installation
 
@@ -47,8 +58,13 @@ For organizations using JAMF Pro or similar MDM solutions:
    ```bash
    ./build-pkg.sh
    ```
-Note, the build script will attempt to use any existing Apple Developer Program installer certificiate for signing if available. Unsigned
-packages work fine for internal deployment via MDM systems.
+   
+   For GitHub releases, packages are automatically built for:
+   - Universal binary (Intel + Apple Silicon)
+   - Intel-only (x86_64)
+   - Apple Silicon-only (arm64)
+   
+   Note: The build script will attempt to use any existing Apple Developer Program installer certificate for signing if available. Unsigned packages work fine for internal deployment via MDM systems.
 
 2. Upload the resulting `bgwarp-1.X.X.pkg` to your MDM distribution point
 
@@ -105,6 +121,15 @@ log show --predicate 'process == "logger" AND eventMessage CONTAINS "bgwarp"' --
 List active recovery jobs:
 ```bash
 launchctl list | grep bgwarp.recovery
+```
+
+Check binary architecture:
+```bash
+# Check installed binary
+lipo -info /usr/local/libexec/.bgwarp
+
+# Check version and architecture
+/usr/local/libexec/.bgwarp --version
 ```
 
 ## Contributing

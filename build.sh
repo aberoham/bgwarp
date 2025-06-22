@@ -5,7 +5,10 @@
 
 set -e
 
-echo "Building bgwarp emergency tool..."
+# Accept version as first parameter (optional)
+VERSION="${1:-dev}"
+
+echo "Building bgwarp emergency tool (version: $VERSION)..."
 
 # Check if source file exists
 if [ ! -f "bgwarp.m" ]; then
@@ -20,6 +23,7 @@ clang -framework Foundation \
       -framework SystemConfiguration \
       -fobjc-arc \
       -O2 \
+      -DBGWARP_VERSION="\"$VERSION\"" \
       -Weverything \
       -Wno-padded \
       -Wno-gnu-statement-expression \

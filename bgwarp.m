@@ -17,6 +17,11 @@
 #import <sys/resource.h>
 #import <pwd.h>
 
+// Version information - can be overridden at compile time
+#ifndef BGWARP_VERSION
+#define BGWARP_VERSION "dev"
+#endif
+
 #define WARP_CLI_PATH "/usr/local/bin/warp-cli"
 #define MAX_CMD_OUTPUT 4096
 #define MAX_AUTH_ATTEMPTS 3
@@ -41,6 +46,7 @@ static time_t lockoutEndTime = 0;
 static void performInteractiveRecovery(const char *wifiInterface, const char *ethernetInterface);
 static void performNetworkRecovery(void);
 static void showHelp(const char *programName);
+static void showVersion(void);
 static void safeLogMessage(const char *format, ...);
 static BOOL checkRateLimit(void);
 static void recordAuthAttempt(BOOL success);
@@ -729,6 +735,18 @@ static void performTestMode(void) {
 }
 
 // Function to show help information
+static void showVersion(void) {
+    const char *arch = "unknown";
+#if defined(__x86_64__)
+    arch = "x86_64";
+#elif defined(__arm64__) || defined(__aarch64__)
+    arch = "arm64";
+#endif
+    printf("bgwarp version %s (%s)\n", BGWARP_VERSION, arch);
+    printf("Emergency WARP disconnect tool for macOS\n");
+    printf("Copyright (c) 2025 - Licensed under MIT\n");
+}
+
 static void showHelp(const char *programName) {
     printf("Emergency WARP disconnect tool for macOS\n");
     printf("\n");
@@ -741,6 +759,7 @@ static void showHelp(const char *programName) {
     printf("                        Actual reconnect: random between base and 2x base\n");
     printf("  --no-recovery     Disable automatic WARP reconnection\n");
     printf("                    WARNING: Manual reconnection will be required\n");
+    printf("  --version, -v     Show version information\n");
     printf("  --help, -h        Print this help message\n");
     printf("\n");
     printf("Description:\n");
@@ -930,10 +949,13 @@ int main(int argc, const char * argv[]) {
         // Sanitise environment variables first for security
         sanitizeEnvironment();
         
-        // Check for help flag first
+        // Check for help/version flags first (no auth required)
         for (int i = 1; i < argc; i++) {
             if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
                 showHelp(argv[0]);
+                return 0;
+            } else if (strcmp(argv[i], "--version") == 0 || strcmp(argv[i], "-v") == 0) {
+                showVersion();
                 return 0;
             }
         }

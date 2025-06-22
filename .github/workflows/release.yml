@@ -1,0 +1,336 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*.*'
+  workflow_dispatch:
+    inputs:
+      release_type:
+        description: 'Release type (patch, build, or custom)'
+        required: true
+        default: 'build'
+        type: choice
+        options:
+          - patch
+          - build
+          - custom
+      custom_version:
+        description: 'Custom version (only used if release_type is custom)'
+        required: false
+
+env:
+  BINARY_NAME: bgwarp
+
+jobs:
+  build:
+    name: Build ${{ matrix.name }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: macos-13
+            arch: x86_64
+            name: Intel
+          - os: macos-14
+            arch: arm64
+            name: Apple Silicon
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Determine version
+      id: version
+      run: |
+        # Get current date components
+        YEAR=$(date +%Y)
+        MONTH=$(date +%-m)  # No zero padding
+        
+        # Determine version based on trigger
+        if [[ "${{ github.event_name }}" == "push" && "${{ github.ref_type }}" == "tag" ]]; then
+          # Extract version from tag (remove 'v' prefix)
+          VERSION="${GITHUB_REF_NAME#v}"
+        elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          # Get the last tag to determine build number
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v${YEAR}.${MONTH}.0.0")
+          LAST_VERSION="${LAST_TAG#v}"
+          
+          # Parse components
+          IFS='.' read -r LAST_YEAR LAST_MONTH LAST_BUILD LAST_PATCH <<< "$LAST_VERSION"
+          
+          case "${{ github.event.inputs.release_type }}" in
+            patch)
+              # Increment patch number
+              if [[ "$LAST_YEAR.$LAST_MONTH" == "$YEAR.$MONTH" ]]; then
+                VERSION="${YEAR}.${MONTH}.${LAST_BUILD}.$((LAST_PATCH + 1))"
+              else
+                VERSION="${YEAR}.${MONTH}.1.0"
+              fi
+              ;;
+            build)
+              # Increment build number
+              if [[ "$LAST_YEAR.$LAST_MONTH" == "$YEAR.$MONTH" ]]; then
+                VERSION="${YEAR}.${MONTH}.$((LAST_BUILD + 1)).0"
+              else
+                VERSION="${YEAR}.${MONTH}.1.0"
+              fi
+              ;;
+            custom)
+              VERSION="${{ github.event.inputs.custom_version }}"
+              ;;
+          esac
+        else
+          # Default: increment build number
+          VERSION="${YEAR}.${MONTH}.1.0"
+        fi
+        
+        echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+        echo "VERSION_TAG=v${VERSION}" >> $GITHUB_OUTPUT
+        echo "Building version: ${VERSION}"
+
+    - name: Build binary
+      run: |
+        chmod +x build.sh
+        # Pass version to build script
+        ./build.sh "${{ steps.version.outputs.VERSION }}"
+        # Rename binary with architecture
+        mv bgwarp bgwarp-${{ matrix.arch }}
+
+    - name: Upload architecture-specific binary
+      uses: actions/upload-artifact@v4
+      with:
+        name: bgwarp-${{ matrix.arch }}
+        path: bgwarp-${{ matrix.arch }}
+        if-no-files-found: error
+
+  create-universal-binary:
+    name: Create Universal Binary and Release
+    needs: build
+    runs-on: macos-latest
+    permissions:
+      contents: write
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Download Intel binary
+      uses: actions/download-artifact@v4
+      with:
+        name: bgwarp-x86_64
+        path: .
+
+    - name: Download ARM64 binary
+      uses: actions/download-artifact@v4
+      with:
+        name: bgwarp-arm64
+        path: .
+
+    - name: Create universal binary
+      run: |
+        # Create universal binary
+        lipo -create -output bgwarp bgwarp-x86_64 bgwarp-arm64
+        
+        # Verify architectures
+        echo "Universal binary architectures:"
+        lipo -info bgwarp
+        
+        # Make it executable
+        chmod +x bgwarp
+
+    - name: Determine version
+      id: version
+      run: |
+        # Get current date components
+        YEAR=$(date +%Y)
+        MONTH=$(date +%-m)  # No zero padding
+        
+        # Determine version based on trigger
+        if [[ "${{ github.event_name }}" == "push" && "${{ github.ref_type }}" == "tag" ]]; then
+          # Extract version from tag (remove 'v' prefix)
+          VERSION="${GITHUB_REF_NAME#v}"
+        elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
+          # Get the last tag to determine build number
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v${YEAR}.${MONTH}.0.0")
+          LAST_VERSION="${LAST_TAG#v}"
+          
+          # Parse components
+          IFS='.' read -r LAST_YEAR LAST_MONTH LAST_BUILD LAST_PATCH <<< "$LAST_VERSION"
+          
+          case "${{ github.event.inputs.release_type }}" in
+            patch)
+              # Increment patch number
+              if [[ "$LAST_YEAR.$LAST_MONTH" == "$YEAR.$MONTH" ]]; then
+                VERSION="${YEAR}.${MONTH}.${LAST_BUILD}.$((LAST_PATCH + 1))"
+              else
+                VERSION="${YEAR}.${MONTH}.1.0"
+              fi
+              ;;
+            build)
+              # Increment build number
+              if [[ "$LAST_YEAR.$LAST_MONTH" == "$YEAR.$MONTH" ]]; then
+                VERSION="${YEAR}.${MONTH}.$((LAST_BUILD + 1)).0"
+              else
+                VERSION="${YEAR}.${MONTH}.1.0"
+              fi
+              ;;
+            custom)
+              VERSION="${{ github.event.inputs.custom_version }}"
+              ;;
+          esac
+        else
+          # Default: increment build number
+          VERSION="${YEAR}.${MONTH}.1.0"
+        fi
+        
+        echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
+        echo "VERSION_TAG=v${VERSION}" >> $GITHUB_OUTPUT
+        echo "Building packages for version: ${VERSION}"
+
+    - name: Update version in build script
+      run: |
+        sed -i '' "s/VERSION=\"[^\"]*\"/VERSION=\"${{ steps.version.outputs.VERSION }}\"/" build-pkg.sh
+        
+    - name: Build universal package
+      run: |
+        chmod +x build-pkg.sh
+        # Build main universal package
+        ./build-pkg.sh
+        # Rename to indicate universal
+        mv bgwarp-${{ steps.version.outputs.VERSION }}.pkg bgwarp-${{ steps.version.outputs.VERSION }}-universal.pkg
+        if [ -f bgwarp-${{ steps.version.outputs.VERSION }}-signed.pkg ]; then
+          mv bgwarp-${{ steps.version.outputs.VERSION }}-signed.pkg bgwarp-${{ steps.version.outputs.VERSION }}-universal-signed.pkg
+        fi
+
+    - name: Build architecture-specific packages
+      run: |
+        # Build Intel package
+        cp bgwarp-x86_64 packaging/payload/usr/local/libexec/.bgwarp
+        ./build-pkg.sh
+        mv bgwarp-${{ steps.version.outputs.VERSION }}.pkg bgwarp-${{ steps.version.outputs.VERSION }}-intel.pkg
+        if [ -f bgwarp-${{ steps.version.outputs.VERSION }}-signed.pkg ]; then
+          mv bgwarp-${{ steps.version.outputs.VERSION }}-signed.pkg bgwarp-${{ steps.version.outputs.VERSION }}-intel-signed.pkg
+        fi
+        
+        # Build ARM64 package
+        cp bgwarp-arm64 packaging/payload/usr/local/libexec/.bgwarp
+        ./build-pkg.sh
+        mv bgwarp-${{ steps.version.outputs.VERSION }}.pkg bgwarp-${{ steps.version.outputs.VERSION }}-arm64.pkg
+        if [ -f bgwarp-${{ steps.version.outputs.VERSION }}-signed.pkg ]; then
+          mv bgwarp-${{ steps.version.outputs.VERSION }}-signed.pkg bgwarp-${{ steps.version.outputs.VERSION }}-arm64-signed.pkg
+        fi
+
+    - name: Calculate checksums
+      id: checksums
+      run: |
+        # Calculate checksums for all artifacts
+        shasum -a 256 bgwarp > bgwarp.sha256
+        shasum -a 256 bgwarp-x86_64 >> bgwarp.sha256
+        shasum -a 256 bgwarp-arm64 >> bgwarp.sha256
+        shasum -a 256 bgwarp-*.pkg >> bgwarp.sha256
+        
+        # Also create individual checksum files
+        for file in bgwarp bgwarp-x86_64 bgwarp-arm64 bgwarp-*.pkg; do
+          if [ -f "$file" ]; then
+            shasum -a 256 "$file" > "${file}.sha256"
+          fi
+        done
+        
+        # Output for release notes
+        echo "CHECKSUMS<<EOF" >> $GITHUB_OUTPUT
+        cat bgwarp.sha256 >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Generate release notes
+      id: release_notes
+      run: |
+        # Get commits since last tag
+        LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+        
+        cat > release_notes.md << EOF
+        ## bgwarp ${{ steps.version.outputs.VERSION }}
+        
+        Emergency WARP disconnect tool for macOS administrators.
+        
+        ### Downloads
+        
+        **Recommended: Universal Package (works on all Macs)**
+        - \`bgwarp-${{ steps.version.outputs.VERSION }}-universal.pkg\` - Works on both Intel and Apple Silicon Macs
+        - \`bgwarp-${{ steps.version.outputs.VERSION }}-universal-signed.pkg\` - Signed version (if available)
+        
+        **Architecture-Specific Packages**
+        - \`bgwarp-${{ steps.version.outputs.VERSION }}-intel.pkg\` - Intel Macs only
+        - \`bgwarp-${{ steps.version.outputs.VERSION }}-arm64.pkg\` - Apple Silicon Macs only
+        
+        **Raw Binaries (for manual installation)**
+        - \`bgwarp\` - Universal binary (Intel + Apple Silicon)
+        - \`bgwarp-x86_64\` - Intel only
+        - \`bgwarp-arm64\` - Apple Silicon only
+        
+        ### Installation
+        
+        **Option 1: Package Installer (Recommended for JAMF)**
+        \`\`\`bash
+        # Download and install the universal package
+        sudo installer -pkg bgwarp-${{ steps.version.outputs.VERSION }}-universal.pkg -target /
+        \`\`\`
+        
+        **Option 2: Direct Binary**
+        \`\`\`bash
+        # Download universal binary
+        curl -LO https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/bgwarp
+        chmod +x bgwarp
+        sudo ./install.sh
+        \`\`\`
+        
+        ### Architecture Support
+        
+        This release includes a universal binary that runs natively on:
+        - ✅ Intel-based Macs (x86_64)
+        - ✅ Apple Silicon Macs (arm64/M1/M2/M3)
+        
+        ### Changes
+        EOF
+        
+        if [ -n "$LAST_TAG" ]; then
+          echo "" >> release_notes.md
+          git log --oneline --no-merges ${LAST_TAG}..HEAD | sed 's/^/- /' >> release_notes.md
+        else
+          echo "- Initial release with universal binary support" >> release_notes.md
+        fi
+        
+        echo "" >> release_notes.md
+        echo "### Checksums" >> release_notes.md
+        echo "\`\`\`" >> release_notes.md
+        cat bgwarp.sha256 >> release_notes.md
+        echo "\`\`\`" >> release_notes.md
+        
+        echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
+        cat release_notes.md >> $GITHUB_OUTPUT
+        echo "EOF" >> $GITHUB_OUTPUT
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ steps.version.outputs.VERSION_TAG }}
+        name: bgwarp ${{ steps.version.outputs.VERSION }}
+        body: ${{ steps.release_notes.outputs.RELEASE_NOTES }}
+        draft: false
+        prerelease: false
+        files: |
+          bgwarp
+          bgwarp-x86_64
+          bgwarp-arm64
+          bgwarp-*.pkg
+          bgwarp.sha256
+          bgwarp*.sha256
+
+    - name: Update latest tag
+      run: |
+        git tag -f latest
+        git push origin latest --force

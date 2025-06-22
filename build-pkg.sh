@@ -33,7 +33,7 @@ fi
 # Build the binary first if it doesn't exist
 if [ ! -f "bgwarp" ]; then
     echo -e "${YELLOW}Binary not found, building...${NC}"
-    ./build.sh
+    ./build.sh "$VERSION"
     if [ $? -ne 0 ]; then
         echo -e "${RED}Build failed!${NC}"
         exit 1
