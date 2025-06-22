@@ -199,6 +199,44 @@ jobs:
     - name: Build universal package
       run: |
         chmod +x build-pkg.sh
+        # Create packaging directory structure
+        mkdir -p packaging/payload/usr/local/libexec
+        mkdir -p packaging/scripts
+        
+        # Create postinstall script if it doesn't exist
+        if [ ! -f packaging/scripts/postinstall ]; then
+          cat > packaging/scripts/postinstall << 'EOF'
+#!/bin/bash
+# Post-installation script for bgwarp
+set -e
+
+INSTALL_PATH="/usr/local/libexec/.bgwarp"
+
+# Set proper ownership and permissions
+if [ -f "$INSTALL_PATH" ]; then
+    chown root:wheel "$INSTALL_PATH"
+    chmod 4755 "$INSTALL_PATH"
+    echo "bgwarp: Set setuid permissions on $INSTALL_PATH"
+else
+    echo "bgwarp: Warning - $INSTALL_PATH not found after installation"
+    exit 1
+fi
+
+# Verify permissions were set correctly
+actual_perms=$(stat -f "%Sp" "$INSTALL_PATH" 2>/dev/null || echo "unknown")
+if [[ "$actual_perms" == "-rwsr-xr-x" ]]; then
+    echo "bgwarp: Installation completed successfully"
+    logger -t bgwarp-installer "Installation completed successfully with correct permissions"
+else
+    echo "bgwarp: Warning - Permissions may not be set correctly (got: $actual_perms)"
+    logger -t bgwarp-installer "Warning: Incorrect permissions after installation: $actual_perms"
+fi
+
+exit 0
+EOF
+          chmod +x packaging/scripts/postinstall
+        fi
+        
         # Build main universal package
         ./build-pkg.sh
         # Rename to indicate universal
@@ -209,6 +247,9 @@ jobs:
 
     - name: Build architecture-specific packages
       run: |
+        # Ensure directory exists
+        mkdir -p packaging/payload/usr/local/libexec
+        
         # Build Intel package
         cp bgwarp-x86_64 packaging/payload/usr/local/libexec/.bgwarp
         ./build-pkg.sh
