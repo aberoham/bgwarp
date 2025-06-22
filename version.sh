@@ -89,6 +89,27 @@ create_tag() {
 $(git log --oneline --no-merges $(git describe --tags --abbrev=0 2>/dev/null || echo "")..HEAD | sed 's/^/- /')"
     
     echo -e "${GREEN}✓${NC} Tag created: ${tag}"
+    
+    # Ask user if they want to push the tag
+    echo ""
+    echo -ne "${YELLOW}Push tag to origin? [Y/n] ${NC}"
+    read -r response
+    response=${response:-Y}  # Default to Y if empty
+    
+    if [[ "$response" =~ ^[Yy]$ ]]; then
+        echo -e "${BLUE}Pushing tag to origin...${NC}"
+        if git push origin "$tag"; then
+            echo -e "${GREEN}✓${NC} Tag pushed successfully!"
+            echo ""
+            echo -e "${GREEN}Release workflow will start automatically on GitHub${NC}"
+        else
+            echo -e "${RED}✗${NC} Failed to push tag"
+            echo -e "${YELLOW}You can push manually with: git push origin ${tag}${NC}"
+        fi
+    else
+        echo -e "${YELLOW}Tag not pushed. To push later, run:${NC}"
+        echo "  git push origin ${tag}"
+    fi
 }
 
 # Main script logic
@@ -119,9 +140,6 @@ main() {
             if [[ "${2:-}" == "--tag" ]]; then
                 update_version_in_files "$new_version"
                 create_tag "$new_version"
-                echo ""
-                echo -e "${YELLOW}Don't forget to push the tag:${NC}"
-                echo "  git push origin v${new_version}"
             else
                 echo ""
                 echo "To create a tag, run: $0 build --tag"
@@ -134,9 +152,6 @@ main() {
             if [[ "${2:-}" == "--tag" ]]; then
                 update_version_in_files "$new_version"
                 create_tag "$new_version"
-                echo ""
-                echo -e "${YELLOW}Don't forget to push the tag:${NC}"
-                echo "  git push origin v${new_version}"
             else
                 echo ""
                 echo "To create a tag, run: $0 patch --tag"
@@ -155,9 +170,6 @@ main() {
             if [[ "${3:-}" == "--tag" ]]; then
                 update_version_in_files "$new_version"
                 create_tag "$new_version"
-                echo ""
-                echo -e "${YELLOW}Don't forget to push the tag:${NC}"
-                echo "  git push origin v${new_version}"
             else
                 echo ""
                 echo "To create a tag, run: $0 custom $new_version --tag"

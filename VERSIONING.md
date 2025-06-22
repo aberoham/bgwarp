@@ -75,30 +75,47 @@ The workflow automatically:
 
 ## Release Process
 
-### Automated Release (Recommended)
+### Simple Release Workflow (Recommended)
 
 1. Make your changes and commit
-2. Use version script to create a tag:
+2. Create and push a version tag:
    ```bash
    ./version.sh build --tag
-   git push origin v2025.6.1.0
+   # The script will create the tag and prompt to push it
+   # Answer 'Y' to automatically push and trigger the release
    ```
 3. GitHub Actions will automatically:
-   - Build the binary
-   - Create the installer package
+   - Build universal binaries for Intel and Apple Silicon
+   - Create installer packages for each architecture
    - Generate release notes from commits
    - Upload artifacts with checksums
    - Create a GitHub Release
 
-### Manual Release
+That's it! The entire release process is now automated.
 
-1. Update version in `build-pkg.sh`
-2. Build locally:
-   ```bash
-   ./build.sh
-   ./build-pkg.sh
-   ```
-3. Create release on GitHub manually
+### Alternative Release Methods
+
+#### Manual Tag Push
+If you prefer to push tags manually:
+```bash
+./version.sh build --tag
+# Answer 'n' when prompted to push
+git push origin v2025.6.1.0
+```
+
+#### Workflow Dispatch
+You can also trigger releases from GitHub Actions UI:
+1. Go to Actions → Release Workflow
+2. Click "Run workflow"
+3. Select release type (build/patch/custom)
+
+### Local Package Building
+
+For testing packages locally:
+```bash
+./build.sh        # Builds the binary (version from git tags)
+./build-pkg.sh    # Creates the installer package
+```
 
 ## Version in Code
 
@@ -108,7 +125,7 @@ The version is embedded in the binary at compile time:
 - Shows both version and architecture (x86_64 or arm64)
 
 Version sources:
-- `build-pkg.sh` - Default version for manual builds
-- Git tags - Source of truth for releases
-- GitHub Actions - Automatically determines version from tags or inputs
+- Git tags - Single source of truth for all versions
+- `build-pkg.sh` - Automatically detects version from git tags
+- GitHub Actions - Uses version.sh to calculate versions consistently
 

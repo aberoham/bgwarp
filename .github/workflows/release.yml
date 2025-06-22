@@ -45,46 +45,27 @@ jobs:
     - name: Determine version
       id: version
       run: |
-        # Get current date components
-        YEAR=$(date +%Y)
-        MONTH=$(date +%-m)  # No zero padding
-        
         # Determine version based on trigger
         if [[ "${{ github.event_name }}" == "push" && "${{ github.ref_type }}" == "tag" ]]; then
           # Extract version from tag (remove 'v' prefix)
           VERSION="${GITHUB_REF_NAME#v}"
         elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-          # Get the last tag to determine build number
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v${YEAR}.${MONTH}.0.0")
-          LAST_VERSION="${LAST_TAG#v}"
-          
-          # Parse components
-          IFS='.' read -r LAST_YEAR LAST_MONTH LAST_BUILD LAST_PATCH <<< "$LAST_VERSION"
-          
+          # Use version.sh to calculate the version
+          chmod +x version.sh
           case "${{ github.event.inputs.release_type }}" in
             patch)
-              # Increment patch number
-              if [[ "$LAST_YEAR.$LAST_MONTH" == "$YEAR.$MONTH" ]]; then
-                VERSION="${YEAR}.${MONTH}.${LAST_BUILD}.$((LAST_PATCH + 1))"
-              else
-                VERSION="${YEAR}.${MONTH}.1.0"
-              fi
+              VERSION=$(./version.sh patch | grep "New version:" | awk '{print $3}')
               ;;
             build)
-              # Increment build number
-              if [[ "$LAST_YEAR.$LAST_MONTH" == "$YEAR.$MONTH" ]]; then
-                VERSION="${YEAR}.${MONTH}.$((LAST_BUILD + 1)).0"
-              else
-                VERSION="${YEAR}.${MONTH}.1.0"
-              fi
+              VERSION=$(./version.sh build | grep "New version:" | awk '{print $3}')
               ;;
             custom)
               VERSION="${{ github.event.inputs.custom_version }}"
               ;;
           esac
         else
-          # Default: increment build number
-          VERSION="${YEAR}.${MONTH}.1.0"
+          # Default: use git tag
+          VERSION=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "dev")
         fi
         
         echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
@@ -146,56 +127,33 @@ jobs:
     - name: Determine version
       id: version
       run: |
-        # Get current date components
-        YEAR=$(date +%Y)
-        MONTH=$(date +%-m)  # No zero padding
-        
-        # Determine version based on trigger
+        # Use the same version determination logic as the build job
         if [[ "${{ github.event_name }}" == "push" && "${{ github.ref_type }}" == "tag" ]]; then
           # Extract version from tag (remove 'v' prefix)
           VERSION="${GITHUB_REF_NAME#v}"
         elif [[ "${{ github.event_name }}" == "workflow_dispatch" ]]; then
-          # Get the last tag to determine build number
-          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "v${YEAR}.${MONTH}.0.0")
-          LAST_VERSION="${LAST_TAG#v}"
-          
-          # Parse components
-          IFS='.' read -r LAST_YEAR LAST_MONTH LAST_BUILD LAST_PATCH <<< "$LAST_VERSION"
-          
+          # Use version.sh to calculate the version
+          chmod +x version.sh
           case "${{ github.event.inputs.release_type }}" in
             patch)
-              # Increment patch number
-              if [[ "$LAST_YEAR.$LAST_MONTH" == "$YEAR.$MONTH" ]]; then
-                VERSION="${YEAR}.${MONTH}.${LAST_BUILD}.$((LAST_PATCH + 1))"
-              else
-                VERSION="${YEAR}.${MONTH}.1.0"
-              fi
+              VERSION=$(./version.sh patch | grep "New version:" | awk '{print $3}')
               ;;
             build)
-              # Increment build number
-              if [[ "$LAST_YEAR.$LAST_MONTH" == "$YEAR.$MONTH" ]]; then
-                VERSION="${YEAR}.${MONTH}.$((LAST_BUILD + 1)).0"
-              else
-                VERSION="${YEAR}.${MONTH}.1.0"
-              fi
+              VERSION=$(./version.sh build | grep "New version:" | awk '{print $3}')
               ;;
             custom)
               VERSION="${{ github.event.inputs.custom_version }}"
               ;;
           esac
         else
-          # Default: increment build number
-          VERSION="${YEAR}.${MONTH}.1.0"
+          # Default: use git tag
+          VERSION=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "dev")
         fi
         
         echo "VERSION=${VERSION}" >> $GITHUB_OUTPUT
         echo "VERSION_TAG=v${VERSION}" >> $GITHUB_OUTPUT
         echo "Building packages for version: ${VERSION}"
 
-    - name: Update version in build script
-      run: |
-        sed -i '' "s/VERSION=\"[^\"]*\"/VERSION=\"${{ steps.version.outputs.VERSION }}\"/" build-pkg.sh
-        
     - name: Setup packaging structure
       run: |
         # Create packaging directory structure

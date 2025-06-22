@@ -13,7 +13,13 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Configuration
-VERSION="2025.6.5.0"
+# Detect version from git tags, fall back to "dev" if not in a git repo or no tags
+VERSION=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "dev")
+if [ "$VERSION" = "dev" ]; then
+    echo -e "${YELLOW}Warning: No git tags found, using version 'dev'${NC}"
+    echo -e "${YELLOW}To create a release version, use: ./version.sh build --tag${NC}"
+fi
+
 # Package identifier using GitHub username/repo convention
 # Organizations can override this when building their own packages
 IDENTIFIER="com.github.aberoham.bgwarp"
