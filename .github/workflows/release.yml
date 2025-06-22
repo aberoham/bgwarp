@@ -202,22 +202,20 @@ jobs:
         mkdir -p packaging/payload/usr/local/libexec
         mkdir -p packaging/scripts
         
-        # Create postinstall script
-        cat > packaging/scripts/postinstall << 'SCRIPT_END'
-#!/bin/bash
-set -e
-INSTALL_PATH="/usr/local/libexec/.bgwarp"
-if [ -f "$INSTALL_PATH" ]; then
-    chown root:wheel "$INSTALL_PATH"
-    chmod 4755 "$INSTALL_PATH"
-    echo "bgwarp: Set setuid permissions on $INSTALL_PATH"
-    logger -t bgwarp-installer "Installation completed successfully"
-else
-    echo "bgwarp: Warning - $INSTALL_PATH not found"
-    exit 1
-fi
-exit 0
-SCRIPT_END
+        # Create postinstall script using printf to avoid heredoc issues
+        printf '#!/bin/bash\n' > packaging/scripts/postinstall
+        printf 'set -e\n' >> packaging/scripts/postinstall
+        printf 'INSTALL_PATH="/usr/local/libexec/.bgwarp"\n' >> packaging/scripts/postinstall
+        printf 'if [ -f "$INSTALL_PATH" ]; then\n' >> packaging/scripts/postinstall
+        printf '    chown root:wheel "$INSTALL_PATH"\n' >> packaging/scripts/postinstall
+        printf '    chmod 4755 "$INSTALL_PATH"\n' >> packaging/scripts/postinstall
+        printf '    echo "bgwarp: Set setuid permissions on $INSTALL_PATH"\n' >> packaging/scripts/postinstall
+        printf '    logger -t bgwarp-installer "Installation completed successfully"\n' >> packaging/scripts/postinstall
+        printf 'else\n' >> packaging/scripts/postinstall
+        printf '    echo "bgwarp: Warning - $INSTALL_PATH not found"\n' >> packaging/scripts/postinstall
+        printf '    exit 1\n' >> packaging/scripts/postinstall
+        printf 'fi\n' >> packaging/scripts/postinstall
+        printf 'exit 0\n' >> packaging/scripts/postinstall
         chmod +x packaging/scripts/postinstall
 
     - name: Build universal package
