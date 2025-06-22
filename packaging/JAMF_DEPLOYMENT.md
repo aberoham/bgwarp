@@ -6,10 +6,18 @@ This guide provides step-by-step instructions for deploying the bgwarp emergency
 
 **Important**: This tool should only be deployed to designated incident response personnel, not to all users.
 
+## Getting the Package
+
+Download pre-built packages from the [bgwarp releases page](https://github.com/aberoham/bgwarp/releases/latest). Choose the appropriate package for your deployment:
+- **Universal package** (recommended): Works on all Mac architectures
+- **Architecture-specific packages**: Available if your environment requires single-architecture binaries
+
 ## Prerequisites
 
 - JAMF Pro administrator access
-- The bgwarp installer package (bgwarp-1.0.0.pkg or bgwarp-1.0.0-signed.pkg)
+- A bgwarp installer package downloaded from [GitHub Releases](https://github.com/aberoham/bgwarp/releases/latest)
+  - Recommended: `bgwarp-X.X.X.X-universal.pkg` (works on all Mac architectures)
+  - Alternative: Architecture-specific packages if required by your environment
 - A distribution point configured in JAMF Pro
 - A Smart Group for targeting incident response staff
 
@@ -20,7 +28,7 @@ This guide provides step-by-step instructions for deploying the bgwarp emergency
 3. Click **New**
 4. Fill in the package information:
    - **Display Name**: bgwarp Emergency Tool
-   - **Filename**: bgwarp-1.0.0.pkg (use the signed version if available)
+   - **Filename**: Use the package filename from GitHub (e.g., bgwarp-2025.6.1.0-universal.pkg)
    - **Category**: Utilities (or create an "Emergency Tools" category)
    - **Info**: Emergency tool for disconnecting Cloudflare WARP
    - **Notes**: Only for incident response personnel

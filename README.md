@@ -50,29 +50,11 @@ Pre-built releases include:
 
 ## Installation
 
-### Method 1: Enterprise Deployment (JAMF/MDM)
+### Method 1: Build from Source
 
-For organizations using JAMF Pro or similar MDM solutions:
-
-1. Build the installer package:
-   ```bash
-   ./build-pkg.sh
-   ```
-   
-   For GitHub releases, packages are automatically built for:
-   - Universal binary (Intel + Apple Silicon)
-   - Intel-only (x86_64)
-   - Apple Silicon-only (arm64)
-   
-   Note: The build script will attempt to use any existing Apple Developer Program installer certificate for signing if available. Unsigned packages work fine for internal deployment via MDM systems.
-
-2. Upload the resulting `bgwarp-1.X.X.pkg` to your MDM distribution point
-
-3. Deploy to your incident responder's managed devices 
-
-See [packaging/JAMF_DEPLOYMENT.md](packaging/JAMF_DEPLOYMENT.md) for detailed JAMF Pro deployment instructions.
-
-### Method 2: Manual Installation from Source
+Prerequisites:
+- Xcode Command Line Tools (`xcode-select --install`)
+- Administrator privileges
 
 ```bash
 # Clone the repository
@@ -87,6 +69,20 @@ sudo ./install.sh
 ```
 
 `bgwarp` will be installed to `/usr/local/libexec/.bgwarp` with setuid root permissions.
+
+### Method 2: Enterprise Deployment (JAMF/MDM)
+
+For organizations using JAMF Pro or similar MDM solutions:
+
+1. Download a pre-built package from the [latest release](https://github.com/aberoham/bgwarp/releases/latest):
+   - **Recommended**: `bgwarp-X.X.X.X-universal.pkg` (works on all Mac architectures)
+   - Alternative: Architecture-specific packages for Intel or Apple Silicon
+
+2. Upload the package to your MDM distribution point
+
+3. Deploy to incident responders' managed devices following your organization's deployment procedures
+
+See [packaging/JAMF_DEPLOYMENT.md](packaging/JAMF_DEPLOYMENT.md) for detailed JAMF Pro deployment instructions.
 
 ## Usage
 
