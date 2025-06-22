@@ -1,0 +1,49 @@
+#!/bin/bash
+#
+# Post-installation script for bgwarp emergency tool
+# This script runs after the package files are installed
+# It sets the proper ownership and permissions for the setuid binary
+#
+
+set -e
+
+# Path where the binary is installed
+INSTALL_PATH="/usr/local/libexec/.bgwarp"
+
+# Log installation
+logger -t bgwarp-installer "Setting permissions on bgwarp binary"
+
+# Ensure the binary exists
+if [ ! -f "$INSTALL_PATH" ]; then
+    logger -t bgwarp-installer "ERROR: Binary not found at $INSTALL_PATH"
+    exit 1
+fi
+
+# Set ownership to root:wheel
+chown root:wheel "$INSTALL_PATH"
+if [ $? -eq 0 ]; then
+    logger -t bgwarp-installer "Successfully set ownership to root:wheel"
+else
+    logger -t bgwarp-installer "ERROR: Failed to set ownership"
+    exit 1
+fi
+
+# Set setuid permissions (4755)
+chmod 4755 "$INSTALL_PATH"
+if [ $? -eq 0 ]; then
+    logger -t bgwarp-installer "Successfully set setuid permissions (4755)"
+else
+    logger -t bgwarp-installer "ERROR: Failed to set permissions"
+    exit 1
+fi
+
+# Verify the permissions
+actual_perms=$(stat -f "%Sp" "$INSTALL_PATH")
+if [[ "$actual_perms" == "-rwsr-xr-x" ]]; then
+    logger -t bgwarp-installer "Installation completed successfully"
+    echo "bgwarp emergency tool installed successfully at $INSTALL_PATH"
+else
+    logger -t bgwarp-installer "WARNING: Permissions verification failed, got: $actual_perms"
+fi
+
+exit 0

@@ -85,3 +85,6 @@ xcuserdata/
 # Backup files
 *.bak
 *.backup
+
+# Package files
+*.pkg
