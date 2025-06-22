@@ -1,19 +1,19 @@
 # CLAUDE.md - Project Context for bgwarp
 
 ## Project Overview
-bgwarp (break glass WARP) is an emergency tool for macOS that allows IT administrators to forcefully disconnect Cloudflare WARP during outages when the dashboard is inaccessible. It uses Touch ID authentication and setuid privileges for secure operation.
+bgwarp (break glass WARP) is an emergency tool for macOS that allows IT administrators to forcefully disconnect Cloudflare WARP during outages when the dashboard is inaccessible. It uses Touch ID authentication and setuid privileges for secure operation. A sample, unfinished Windows port exits within the subdirectory windows-port-sample/.
 
 ## Key Design Principles
 
 ### 1. Safety First
 - **Default to test mode**: The tool runs in test mode by default, requiring an explicit `--liveincident` flag for destructive operations
-- **Touch ID required**: Authentication is mandatory even in test mode to ensure the full flow is tested
-- **Auto-recovery**: Implements automatic WARP reconnection after 2-4 hours with randomized timing to prevent synchronized reconnections
+- **Touch ID required**: Authentication is mandatory even in test mode to ensure the full auth flow is tested
+- **Auto-recovery**: Implements automatic WARP reconnection after 2-4 hours with randomised timing to prevent synchronised reconnections
 
 ### 2. Security Architecture
 - **Setuid binary**: Installed with root:wheel ownership and 4755 permissions
 - **Hidden location**: Installed at `/usr/local/libexec/.bgwarp` (note the dot prefix)
-- **LocalAuthentication framework**: Uses macOS native Touch ID with password fallback
+- **LocalAuthentication framework**: Uses macOS native Touch ID with local password fallback
 - **Audit logging**: All operations logged to system logs via `logger` command
 
 ### 3. Naming Conventions
@@ -112,12 +112,10 @@ launchctl unload /tmp/com.bgwarp.recovery.*.plist
 1. **Never create files proactively** - especially documentation or README files
 2. **Maintain existing code style** - this project uses specific formatting for banners and output
 3. **Test mode is default** - this prevents accidental execution
-4. **Hidden installation** - the dot prefix in `.bgwarp` is intentional for obscurity
-5. **Incident-only documentation** - this tool should only be documented in incident playbooks
+4. **Hidden installation** - the dot prefix in `.bgwarp` is intentional for security by obscurity
 
 ## Future Considerations
 
 - The auto-recovery mechanism could be enhanced with retry logic
-- Consider adding a `--no-recovery` flag to disable auto-reconnection
 - Network state validation could be added before attempting reconnection
-- Integration with MDM systems for centralized emergency response
+- Integration with MDM systems for centralised emergency response

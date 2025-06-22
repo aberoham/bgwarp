@@ -15,7 +15,7 @@ dscacheutil -flushcache
 route -n flush
 killall -HUP mDNSResponder
 ```
-After disconnection, `bgwarp` schedules an automatic WARP service reconnection to occur in a few hours, hopefully after the precipitating incident has been resolved. The reconnect timeout includes a random offset to avoid mass simultaneous reconnections across your fleet.
+After disconnection, `bgwarp` schedules an automatic WARP service reconnection to occur in a few hours, hopefully after the precipitating incident has been resolved. The reconnect timeout includes a randomised offset to avoid mass simultaneous reconnections across your fleet.
 
 ## ⚠️ Important Notice
 
@@ -26,7 +26,7 @@ This tool is designed for advanced incident responders with physical device acce
 - Touch ID authentication with password fallback
 - Safe test mode by default (requires `--liveincident` flag to trigger a real disconnect)
 - Automatic local network connectivity recovery after WARP disconnect
-- Configurable auto-reconnection with randomized delays
+- Configurable auto-reconnection with randomised delays
 - WARP taskbar GUI restart after reconnection
 - Comprehensive logging for operational analysis and usage introspection by other security tools
 
@@ -95,7 +95,7 @@ We welcome all feedback and contributions. Please fork the repo, create a featur
 ### Guidelines
 
 - Maintain the security model (emphasis on Touch ID or similar secure local auth)
-- Test thoroughly in test mode and consider including anonymized logs in the PR thread to help speed up evaluation
+- Test thoroughly in test mode and consider including anonymised logs in the PR thread to help speed up evaluation
 - Document any new command-line options following the existing convention of in-situ `--help`
 - Follow existing code style and conventions, beware of AI slop
 

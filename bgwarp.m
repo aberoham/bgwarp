@@ -359,7 +359,7 @@ static void performInteractiveRecovery(const char *wifiInterface, const char *et
         executeCommand("networksetup -setairportpower Wi-Fi on", NULL, 0);
     }
     
-    printf("[*] Waiting for network to stabilize...\n");
+    printf("[*] Waiting for network to stabilise...\n");
     sleep(5);
     
     // Final connectivity check
@@ -748,7 +748,7 @@ static void showHelp(const char *programName) {
     printf("  - Safe by default: Runs in test mode unless --liveincident is specified\n");
     printf("  - Touch ID authentication required (with password fallback)\n");
     printf("  - Automatic network recovery after WARP disconnection\n");
-    printf("  - Auto-reconnection to WARP after base time (randomized between base and 2x base)\n");
+    printf("  - Auto-reconnection to WARP after base time (randomised between base and 2x base)\n");
     printf("  - Automatic restart of WARP GUI application after reconnection\n");
     printf("  - Interactive recovery mode if automatic recovery fails\n");
     printf("\n");
@@ -810,7 +810,7 @@ static void safeLogMessage(const char *format, ...) {
 #pragma clang diagnostic pop
     va_end(args);
     
-    // Sanitize the message - remove any shell metacharacters
+    // Sanitise the message - remove any shell metacharacters
     size_t j = 0;
     for (size_t i = 0; i < strlen(message) && j < sizeof(safe_message) - 1; i++) {
         char c = message[i];
@@ -875,7 +875,7 @@ static void fixFileDescriptors(void) {
     }
 }
 
-// Function to sanitize environment variables
+// Function to sanitise environment variables
 static void sanitizeEnvironment(void) {
     // Remove dangerous environment variables that could affect execution
     const char *dangerous[] = {
@@ -921,7 +921,7 @@ int main(int argc, const char * argv[]) {
         // Fix file descriptors first to ensure proper I/O
         fixFileDescriptors();
         
-        // Sanitize environment variables first for security
+        // Sanitise environment variables first for security
         sanitizeEnvironment();
         
         // Check for help flag first
@@ -1033,7 +1033,7 @@ int main(int argc, const char * argv[]) {
             // Enhanced logging for debugging
             printf("\n[+] Auto-recovery scheduling details:\n");
             printf("    Base time: %d seconds\n", reconnectBaseSeconds);
-            printf("    Randomized delay: %d seconds\n", randomDelay);
+            printf("    Randomised delay: %d seconds\n", randomDelay);
             printf("    Will reconnect WARP and restart GUI application\n");
             printf("    Scheduled in: ");
             if (hours > 0) {
@@ -1090,7 +1090,7 @@ int main(int argc, const char * argv[]) {
             if (reconnectBaseSeconds != 7200) {
                 printf("[TEST] Would use custom reconnect base time: %d seconds\n", reconnectBaseSeconds);
                 int testRandomDelay = reconnectBaseSeconds + (int)arc4random_uniform((uint32_t)(reconnectBaseSeconds + 1));
-                printf("[TEST] Example randomized delay would be: %d seconds\n", testRandomDelay);
+                printf("[TEST] Example randomised delay would be: %d seconds\n", testRandomDelay);
             }
             printf("\nTo execute in a live incident, run with: --liveincident\n");
         }
