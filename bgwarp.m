@@ -993,14 +993,14 @@ int main(int argc, const char * argv[]) {
             printf("╔════════════════════════════════════════════════════════════╗\n");
             printf("║                    TEST MODE ACTIVE                        ║\n");
             printf("╠════════════════════════════════════════════════════════════╣\n");
-            printf("║ This is a test run. Commands will be shown but NOT        ║\n");
+            printf("║ This is a test run. Commands will be shown but NOT         ║\n");
             printf("║ executed. Authentication will be required as normal.       ║\n");
             printf("╚════════════════════════════════════════════════════════════╝\n");
             printf("\n");
         } else {
             printf("\n");
             printf("╔════════════════════════════════════════════════════════════╗\n");
-            printf("║        ⚠️  LIVE INCIDENT MODE - DESTRUCTIVE ACTION ⚠️        ║\n");
+            printf("║        ⚠️ LIVE INCIDENT MODE - DESTRUCTIVE ACTION ⚠️       ║\n");
             printf("╠════════════════════════════════════════════════════════════╣\n");
             printf("║ WARNING: This tool will forcefully disconnect WARP and     ║\n");
             printf("║ terminate all WARP processes. Use only during outages      ║\n");
