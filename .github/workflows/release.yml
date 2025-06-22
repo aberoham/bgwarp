@@ -351,7 +351,6 @@ jobs:
           bgwarp-x86_64
           bgwarp-arm64
           bgwarp-*.pkg
-          bgwarp.sha256
           bgwarp*.sha256
 
     - name: Update latest tag
