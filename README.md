@@ -1,10 +1,10 @@
 # bgwarp - "Break Glass WARP"
 
-Emergency disconnect tool for Cloudflare WARP on macOS. Enables privileged incident responders to forcefully disconnect WARP during outages when the Cloudflare WARP control and/or data plane are misbehaving.
+Emergency disconnect tool for Cloudflare WARP on macOS. Enables privileged incident responders to forcefully disconnect WARP during outages when the control and/or data plane are unresponsive.
 
 ## What running bgwarp does
 
-After authentication, `bgwarp` immediately disconnects WARP by executing these commands:
+After interactive local authentication, `bgwarp` immediately disconnects WARP by executing these commands:
 
 ```bash
 warp-cli disconnect
@@ -23,8 +23,8 @@ This tool is designed for advanced incident responders with physical device acce
 
 ## Features
 
-- Touch ID authentication with password fallback
-- Safe test mode by default (requires `--liveincident` flag to trigger a real disconnect)
+- Touch ID or password authentication
+- Test mode by default (requires `--liveincident` flag for actual disconnect)
 - Automatic local network connectivity recovery after WARP disconnect
 - Configurable auto-reconnection with randomised delays
 - WARP taskbar GUI restart after reconnection
@@ -35,7 +35,7 @@ This tool is designed for advanced incident responders with physical device acce
 - macOS 10.x or later (Intel or Apple Silicon)
 - Cloudflare WARP client installed
 - MDM or administrator privileges for installation
-- Physical access to device (Touch ID or passwd via live terminal)
+- Physical access to device (Touch ID or password via live terminal)
 
 ## Architecture Support
 
@@ -88,7 +88,7 @@ See [packaging/JAMF_DEPLOYMENT.md](packaging/JAMF_DEPLOYMENT.md) for detailed JA
 
 ### Test Mode (Default)
 ```bash
-# Run in test mode to see what would happen
+# Test mode (default) - preview without disconnecting
 /usr/local/libexec/.bgwarp
 ```
 
@@ -157,5 +157,4 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Acknowledgments
 
-Thank you to Cloudflare's Worker KV team for [giving us an excuse](https://www.cloudflarestatus.com/incidents/25r9t0vz99rp) to use 
-Claude Opus-4 via `claude` and install setuid binaries on our worldwide fleet of incident responder macOS laptops.
+Thank you to the Cloudflare team for their work on WARP and for [incident response scenarios](https://www.cloudflarestatus.com/incidents/25r9t0vz99rp) that motivated this tool's development.

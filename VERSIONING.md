@@ -24,10 +24,10 @@ YYYY.M.BUILD.PATCH
 
 ## Why Date-Based Versioning?
 
-1. **Emergency Tool Context**: IT administrators can immediately see when the tool was built, which is critical for security-sensitive emergency tools
+1. **Tool Context**: Users can immediately see when the tool was built, which is critical for security-sensitive emergency tools
 2. **Clear Timeline**: Easy to determine if a version is current or outdated
 3. **Automatic Progression**: No debates about whether a change is major/minor/patch
-4. **Industry Alignment**: Similar to Cloudflare WARP's versioning pattern
+4. **Upstream Alignment**: Similar to Cloudflare WARP's versioning pattern
 
 ## Version Management
 
@@ -112,9 +112,3 @@ Version sources:
 - Git tags - Source of truth for releases
 - GitHub Actions - Automatically determines version from tags or inputs
 
-## Migration from Semantic Versioning
-
-If migrating from the current `1.0.0`:
-1. The next version would be `2025.6.1.0` (assuming June 2025)
-2. This clearly indicates a new versioning scheme
-3. No confusion with semantic version comparison
