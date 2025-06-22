@@ -744,7 +744,7 @@ static void showVersion(void) {
 #endif
     printf("bgwarp version %s (%s)\n", BGWARP_VERSION, arch);
     printf("Emergency WARP disconnect tool for macOS\n");
-    printf("Copyright (c) 2025 - Licensed under MIT\n");
+    printf("Copyright (c) 2025 Abraham Ingersoll - Licensed under MIT\n");
 }
 
 static void showHelp(const char *programName) {

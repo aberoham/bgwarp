@@ -279,37 +279,42 @@ jobs:
         cat > release_notes.md << EOF
         ## bgwarp ${{ steps.version.outputs.VERSION }}
         
-        Emergency WARP disconnect tool for macOS administrators.
+        Emergency disconnect tool for Cloudflare WARP on macOS. Enables privileged incident responders to forcefully disconnect WARP during outages when the Cloudflare WARP control and/or data plane are misbehaving.
         
         ### Downloads
         
         **Recommended: Universal Package (works on all Macs)**
-        - \`bgwarp-${{ steps.version.outputs.VERSION }}-universal.pkg\` - Works on both Intel and Apple Silicon Macs
-        - \`bgwarp-${{ steps.version.outputs.VERSION }}-universal-signed.pkg\` - Signed version (if available)
+        - [\`bgwarp-${{ steps.version.outputs.VERSION }}-universal.pkg\`](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/bgwarp-${{ steps.version.outputs.VERSION }}-universal.pkg) - Works on both Intel and Apple Silicon Macs
         
         **Architecture-Specific Packages**
-        - \`bgwarp-${{ steps.version.outputs.VERSION }}-intel.pkg\` - Intel Macs only
-        - \`bgwarp-${{ steps.version.outputs.VERSION }}-arm64.pkg\` - Apple Silicon Macs only
+        - [\`bgwarp-${{ steps.version.outputs.VERSION }}-intel.pkg\`](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/bgwarp-${{ steps.version.outputs.VERSION }}-intel.pkg) - Intel Macs only
+        - [\`bgwarp-${{ steps.version.outputs.VERSION }}-arm64.pkg\`](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/bgwarp-${{ steps.version.outputs.VERSION }}-arm64.pkg) - Apple Silicon Macs only
         
         **Raw Binaries (for manual installation)**
-        - \`bgwarp\` - Universal binary (Intel + Apple Silicon)
-        - \`bgwarp-x86_64\` - Intel only
-        - \`bgwarp-arm64\` - Apple Silicon only
+        - [\`bgwarp\`](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/bgwarp) - Universal binary (Intel + Apple Silicon)
+        - [\`bgwarp-x86_64\`](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/bgwarp-x86_64) - Intel only
+        - [\`bgwarp-arm64\`](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/bgwarp-arm64) - Apple Silicon only
         
         ### Installation
         
         **Option 1: Package Installer (Recommended for JAMF)**
         \`\`\`bash
         # Download and install the universal package
+        curl -LO https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/bgwarp-${{ steps.version.outputs.VERSION }}-universal.pkg
         sudo installer -pkg bgwarp-${{ steps.version.outputs.VERSION }}-universal.pkg -target /
         \`\`\`
         
-        **Option 2: Direct Binary**
+        **Option 2: Direct Binary Installation**
         \`\`\`bash
         # Download universal binary
         curl -LO https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/bgwarp
         chmod +x bgwarp
-        sudo ./install.sh
+        
+        # Install with proper permissions
+        sudo mkdir -p /usr/local/libexec
+        sudo cp bgwarp /usr/local/libexec/.bgwarp
+        sudo chown root:wheel /usr/local/libexec/.bgwarp
+        sudo chmod 4755 /usr/local/libexec/.bgwarp
         \`\`\`
         
         ### Architecture Support
