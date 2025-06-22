@@ -24,7 +24,7 @@
 #endif
 
 #define WARP_CLI_PATH "/usr/local/bin/warp-cli"
-#define MAX_CMD_OUTPUT 4096
+#define MAX_CMD_OUTPUT 16384
 #define MAX_AUTH_ATTEMPTS 3
 #define AUTH_LOCKOUT_SECONDS 60
 #define AUTH_BACKOFF_SECONDS 5
@@ -81,21 +81,28 @@ static int executeCommand(const char *command, char *output, size_t outputSize) 
     if (output && outputSize > 0) {
         bytesRead = fread(output, 1, outputSize - 1, pipe);
         output[bytesRead] = '\0';
+        
+        // Check if buffer might be truncated
+        if (bytesRead == outputSize - 1) {
+            // Try to read one more byte to confirm truncation
+            char extraByte;
+            if (fread(&extraByte, 1, 1, pipe) == 1) {
+                // Output was truncated
+                fprintf(stderr, "[!] Warning: Command output truncated (buffer size: %zu bytes)\n", outputSize);
+                safeLogMessage("Command output truncated for: %s (buffer size: %zu)", command, outputSize);
+            }
+        }
     }
     
     int status = pclose(pipe);
     return WEXITSTATUS(status);
 }
 
-// Helper function to build privileged commands (with or without sudo based on euid)
+// Helper function to build privileged commands
+// Note: This program requires root privileges to run (checked in main)
+// so we're always running as root when this function is called
 static void buildPrivilegedCommand(char *dest, size_t destSize, const char *command) {
-    if (geteuid() == 0) {
-        // Already running as root, no need for sudo
-        snprintf(dest, destSize, "%s", command);
-    } else {
-        // Not root, need sudo
-        snprintf(dest, destSize, "sudo %s", command);
-    }
+    snprintf(dest, destSize, "%s", command);
 }
 
 // Function to perform WARP cleanup operations
@@ -183,6 +190,13 @@ static void detectNetworkInterfaces(char *wifiInterface, size_t wifiSize, char *
                 }
             }
             line = strtok(NULL, "\n");
+        }
+        
+        // Warn if no interfaces were detected and output might have been truncated
+        if (wifiInterface[0] == '\0' && ethernetInterface[0] == '\0' && strlen(output) == MAX_CMD_OUTPUT - 1) {
+            fprintf(stderr, "[!] Warning: No network interfaces detected. Output may have been truncated.\n");
+            fprintf(stderr, "    Consider increasing MAX_CMD_OUTPUT if your system has many network interfaces.\n");
+            safeLogMessage("Network interface detection may have failed due to output truncation");
         }
     }
 }
@@ -1135,7 +1149,7 @@ int main(int argc, const char * argv[]) {
             if (fd == -1) {
                 fprintf(stderr, "[!] Failed to create recovery plist file: %s\n", strerror(errno));
                 safeLogMessage("Failed to create recovery plist file (errno=%d): %s", errno, strerror(errno));
-                return 0;
+                return 1;
             }
             
             // Copy the actual filename for later use
@@ -1149,7 +1163,7 @@ int main(int argc, const char * argv[]) {
                 unlink(plistTemplate);
                 fprintf(stderr, "[!] Failed to open recovery plist file stream: %s\n", strerror(errno));
                 safeLogMessage("Failed to open recovery plist file stream (errno=%d): %s", errno, strerror(errno));
-                return 0;
+                return 1;
             }
             
             fprintf(plist, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
