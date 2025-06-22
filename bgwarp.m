@@ -782,7 +782,7 @@ static void showHelp(const char *programName) {
     printf("\n");
     printf("Live Mode (--liveincident):\n");
     printf("  WARNING: Destructive operation that will:\n");
-    printf("  - Disconnect and delete WARP configuration\n");
+    printf("  - Disconnect WARP\n");
     printf("  - Terminate all WARP processes\n");
     printf("  - Reset network routes and DNS\n");
     printf("  - Attempt automatic network recovery\n");
@@ -1000,11 +1000,11 @@ int main(int argc, const char * argv[]) {
         } else {
             printf("\n");
             printf("╔════════════════════════════════════════════════════════════╗\n");
-            printf("║         ⚠️  LIVE INCIDENT MODE - DESTRUCTIVE ACTION ⚠️      ║\n");
+            printf("║        ⚠️  LIVE INCIDENT MODE - DESTRUCTIVE ACTION ⚠️        ║\n");
             printf("╠════════════════════════════════════════════════════════════╣\n");
             printf("║ WARNING: This tool will forcefully disconnect WARP and     ║\n");
-            printf("║ remove all configuration. Use only during outages when     ║\n");
-            printf("║ the dashboard is inaccessible.                             ║\n");
+            printf("║ terminate all WARP processes. Use only during outages      ║\n");
+            printf("║ when the dashboard is inaccessible.                        ║\n");
             printf("╚════════════════════════════════════════════════════════════╝\n");
             printf("\n");
         }
