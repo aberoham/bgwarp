@@ -29,6 +29,9 @@ static BOOL liveMode = NO;
 // Global setting for reconnect base time in seconds (default is 2 hours = 7200 seconds)
 static int reconnectBaseSeconds = 7200;
 
+// Global flag to disable auto-recovery
+static BOOL disableRecovery = NO;
+
 // Rate limiting state
 static int authAttempts = 0;
 static time_t lastAttemptTime = 0;
@@ -736,6 +739,8 @@ static void showHelp(const char *programName) {
     printf("  --reconnect <seconds> Set reconnect base time in seconds (60-43200)\n");
     printf("                        Default: 7200 (2 hours)\n");
     printf("                        Actual reconnect: random between base and 2x base\n");
+    printf("  --no-recovery     Disable automatic WARP reconnection\n");
+    printf("                    WARNING: Manual reconnection will be required\n");
     printf("  --help, -h        Print this help message\n");
     printf("\n");
     printf("Description:\n");
@@ -762,7 +767,7 @@ static void showHelp(const char *programName) {
     printf("  - Terminate all WARP processes\n");
     printf("  - Reset network routes and DNS\n");
     printf("  - Attempt automatic network recovery\n");
-    printf("  - Schedule WARP reconnection (configurable with --reconnect)\n");
+    printf("  - Schedule WARP reconnection (unless --no-recovery is used)\n");
     printf("\n");
     printf("Network Recovery:\n");
     printf("  After disconnecting WARP, the tool will:\n");
@@ -779,6 +784,7 @@ static void showHelp(const char *programName) {
     printf("  %s                  # Run in test mode\n", programName);
     printf("  %s --liveincident   # Run in live mode (use during outages)\n", programName);
     printf("  %s --liveincident --reconnect 300  # 5 min base reconnect time\n", programName);
+    printf("  %s --liveincident --no-recovery  # No auto-reconnection\n", programName);
     printf("\n");
     printf("Debugging:\n");
     printf("  View bgwarp logs:\n");
@@ -945,6 +951,8 @@ int main(int argc, const char * argv[]) {
                 }
                 reconnectBaseSeconds = seconds;
                 i++; // Skip the next argument since we consumed it
+            } else if (strcmp(argv[i], "--no-recovery") == 0) {
+                disableRecovery = YES;
             }
         }
         
@@ -1024,8 +1032,27 @@ int main(int argc, const char * argv[]) {
             // Log completion
             safeLogMessage("Emergency WARP disconnect completed for user %s", username);
             
-            // Schedule auto-recovery with random delay between base and 2x base
-            int randomDelay = reconnectBaseSeconds + (int)arc4random_uniform((uint32_t)(reconnectBaseSeconds + 1));
+            // Check if auto-recovery is disabled
+            if (disableRecovery) {
+                printf("\n");
+                printf("╔════════════════════════════════════════════════════════════╗\n");
+                printf("║          ⚠️  AUTO-RECOVERY DISABLED ⚠️                      ║\n");
+                printf("╠════════════════════════════════════════════════════════════╣\n");
+                printf("║ Auto-recovery has been disabled with --no-recovery flag.   ║\n");
+                printf("║ WARP will remain disconnected until manually reconnected.  ║\n");
+                printf("║                                                            ║\n");
+                printf("║ To reconnect WARP manually, run:                          ║\n");
+                printf("║   /usr/local/bin/warp-cli connect                         ║\n");
+                printf("║                                                            ║\n");
+                printf("║ To restart the WARP GUI application:                      ║\n");
+                printf("║   open -a 'Cloudflare WARP'                               ║\n");
+                printf("╚════════════════════════════════════════════════════════════╝\n");
+                printf("\n");
+                
+                safeLogMessage("Auto-recovery disabled by --no-recovery flag for user %s", username);
+            } else {
+                // Schedule auto-recovery with random delay between base and 2x base
+                int randomDelay = reconnectBaseSeconds + (int)arc4random_uniform((uint32_t)(reconnectBaseSeconds + 1));
             int hours = randomDelay / 3600;
             int minutes = (randomDelay % 3600) / 60;
             int seconds = randomDelay % 60;
@@ -1085,9 +1112,15 @@ int main(int argc, const char * argv[]) {
                 printf("    LaunchD job: com.bgwarp.recovery.%d\n", getpid());
                 printf("    Plist location: %s\n", plistPath);
             }
+            } // End of auto-recovery enabled block
         } else {
             printf("\n[TEST] Test mode completed. No actual commands were executed.\n");
-            if (reconnectBaseSeconds != 7200) {
+            if (disableRecovery) {
+                printf("[TEST] Auto-recovery would be DISABLED (--no-recovery flag set)\n");
+                printf("[TEST] Manual reconnection would be required:\n");
+                printf("[TEST]   /usr/local/bin/warp-cli connect\n");
+                printf("[TEST]   open -a 'Cloudflare WARP'\n");
+            } else if (reconnectBaseSeconds != 7200) {
                 printf("[TEST] Would use custom reconnect base time: %d seconds\n", reconnectBaseSeconds);
                 int testRandomDelay = reconnectBaseSeconds + (int)arc4random_uniform((uint32_t)(reconnectBaseSeconds + 1));
                 printf("[TEST] Example randomised delay would be: %d seconds\n", testRandomDelay);
