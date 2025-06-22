@@ -13,7 +13,7 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Configuration
-VERSION="1.0.0"
+VERSION="2025.6.5.0"
 # Package identifier using GitHub username/repo convention
 # Organizations can override this when building their own packages
 IDENTIFIER="com.github.aberoham.bgwarp"

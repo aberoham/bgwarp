@@ -118,4 +118,3 @@ launchctl unload /tmp/com.bgwarp.recovery.*.plist
 
 - The auto-recovery mechanism could be enhanced with retry logic
 - Network state validation could be added before attempting reconnection
-- Integration with MDM systems for centralised emergency response

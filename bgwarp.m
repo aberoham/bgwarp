@@ -16,6 +16,7 @@
 #import <fcntl.h>
 #import <sys/resource.h>
 #import <pwd.h>
+#import <mach-o/dyld.h>
 
 // Version information - can be overridden at compile time
 #ifndef BGWARP_VERSION
@@ -166,15 +167,19 @@ static void detectNetworkInterfaces(char *wifiInterface, size_t wifiSize, char *
         while (line != NULL) {
             if (strstr(line, "Hardware Port:")) {
                 strncpy(currentPort, line + 15, sizeof(currentPort) - 1);
+                currentPort[sizeof(currentPort) - 1] = '\0';  // Ensure null-termination
             } else if (strstr(line, "Device:")) {
                 strncpy(currentDevice, line + 8, sizeof(currentDevice) - 1);
+                currentDevice[sizeof(currentDevice) - 1] = '\0';  // Ensure null-termination
                 
                 // Check if this is Wi-Fi or Ethernet
                 if (strstr(currentPort, "Wi-Fi") || strstr(currentPort, "AirPort")) {
                     strncpy(wifiInterface, currentDevice, wifiSize - 1);
+                    wifiInterface[wifiSize - 1] = '\0';  // Ensure null-termination
                 } else if (strstr(currentPort, "Ethernet") || strstr(currentPort, "USB") || 
                           strstr(currentPort, "Thunderbolt") || strstr(currentPort, "Display")) {
                     strncpy(ethernetInterface, currentDevice, ethSize - 1);
+                    ethernetInterface[ethSize - 1] = '\0';  // Ensure null-termination
                 }
             }
             line = strtok(NULL, "\n");
@@ -565,6 +570,7 @@ static BOOL authenticateWithTouchID(void) {
     // Use seteuid/setegid with proper error handling and atomicity
     if (setegid(real_gid) != 0) {
         fprintf(stderr, "Failed to drop group privileges for authentication\n");
+        safeLogMessage("Security: Failed to drop group privileges for authentication (errno=%d, egid=%u->%u)", errno, saved_egid, real_gid);
         sigprocmask(SIG_SETMASK, &omask, NULL);
         return NO;
     }
@@ -573,6 +579,7 @@ static BOOL authenticateWithTouchID(void) {
         // Attempt to restore gid on failure
         setegid(saved_egid);
         fprintf(stderr, "Failed to drop user privileges for authentication\n");
+        safeLogMessage("Security: Failed to drop user privileges for authentication (errno=%d, euid=%u->%u)", errno, saved_euid, real_uid);
         sigprocmask(SIG_SETMASK, &omask, NULL);
         return NO;
     }
@@ -613,9 +620,11 @@ static BOOL authenticateWithTouchID(void) {
                 // Restore privileges before returning (order matters: uid first, then gid)
                 if (seteuid(saved_euid) != 0) {
                     fprintf(stderr, "CRITICAL: Failed to restore uid after timeout\n");
+                    safeLogMessage("CRITICAL: Failed to restore euid after auth timeout (errno=%d, euid=%u->%u)", errno, real_uid, saved_euid);
                 }
                 if (setegid(saved_egid) != 0) {
                     fprintf(stderr, "CRITICAL: Failed to restore gid after timeout\n");
+                    safeLogMessage("CRITICAL: Failed to restore egid after auth timeout (errno=%d, egid=%u->%u)", errno, real_gid, saved_egid);
                 }
                 sigprocmask(SIG_SETMASK, &omask, NULL);
                 return NO;
@@ -624,11 +633,13 @@ static BOOL authenticateWithTouchID(void) {
             // Restore root privileges (order matters: uid first, then gid)
             if (seteuid(saved_euid) != 0) {
                 fprintf(stderr, "CRITICAL: Failed to restore effective uid\n");
+                safeLogMessage("CRITICAL: Failed to restore euid after password auth (errno=%d, euid=%u->%u)", errno, real_uid, saved_euid);
                 sigprocmask(SIG_SETMASK, &omask, NULL);
                 return NO;
             }
             if (setegid(saved_egid) != 0) {
                 fprintf(stderr, "CRITICAL: Failed to restore effective gid\n");
+                safeLogMessage("CRITICAL: Failed to restore egid after password auth (errno=%d, egid=%u->%u)", errno, real_gid, saved_egid);
                 sigprocmask(SIG_SETMASK, &omask, NULL);
                 return NO;
             }
@@ -640,9 +651,11 @@ static BOOL authenticateWithTouchID(void) {
         // Restore root privileges even in error case (order matters)
         if (seteuid(saved_euid) != 0) {
             fprintf(stderr, "CRITICAL: Failed to restore effective uid in error case\n");
+            safeLogMessage("CRITICAL: Failed to restore euid in error case (errno=%d, euid=%u->%u)", errno, real_uid, saved_euid);
         }
         if (setegid(saved_egid) != 0) {
             fprintf(stderr, "CRITICAL: Failed to restore effective gid in error case\n");
+            safeLogMessage("CRITICAL: Failed to restore egid in error case (errno=%d, egid=%u->%u)", errno, real_gid, saved_egid);
         }
         
         sigprocmask(SIG_SETMASK, &omask, NULL); // Restore signals
@@ -674,9 +687,11 @@ static BOOL authenticateWithTouchID(void) {
         // Restore privileges before returning (order matters)
         if (seteuid(saved_euid) != 0) {
             fprintf(stderr, "CRITICAL: Failed to restore uid after Touch ID timeout\n");
+            safeLogMessage("CRITICAL: Failed to restore euid after Touch ID timeout (errno=%d, euid=%u->%u)", errno, real_uid, saved_euid);
         }
         if (setegid(saved_egid) != 0) {
             fprintf(stderr, "CRITICAL: Failed to restore gid after Touch ID timeout\n");
+            safeLogMessage("CRITICAL: Failed to restore egid after Touch ID timeout (errno=%d, egid=%u->%u)", errno, real_gid, saved_egid);
         }
         sigprocmask(SIG_SETMASK, &omask, NULL);
         return NO;
@@ -685,11 +700,13 @@ static BOOL authenticateWithTouchID(void) {
     // Restore root privileges (order matters: uid first, then gid)
     if (seteuid(saved_euid) != 0) {
         fprintf(stderr, "CRITICAL: Failed to restore effective uid after Touch ID\n");
+        safeLogMessage("CRITICAL: Failed to restore euid after Touch ID auth (errno=%d, euid=%u->%u)", errno, real_uid, saved_euid);
         sigprocmask(SIG_SETMASK, &omask, NULL);
         return NO;
     }
     if (setegid(saved_egid) != 0) {
         fprintf(stderr, "CRITICAL: Failed to restore effective gid after Touch ID\n");
+        safeLogMessage("CRITICAL: Failed to restore egid after Touch ID auth (errno=%d, egid=%u->%u)", errno, real_gid, saved_egid);
         sigprocmask(SIG_SETMASK, &omask, NULL);
         return NO;
     }
@@ -709,8 +726,19 @@ static void performTestMode(void) {
     
     // Check if binary has setuid bit
     struct stat fileStat;
-    if (stat("/proc/self/exe", &fileStat) == 0 || stat(getenv("_"), &fileStat) == 0) {
-        printf("  - Setuid bit: %s\n", (fileStat.st_mode & S_ISUID) ? "SET" : "NOT SET");
+    char execPath[PATH_MAX];
+    uint32_t size = sizeof(execPath);
+    
+    if (_NSGetExecutablePath(execPath, &size) == 0) {
+        // Successfully got executable path
+        if (stat(execPath, &fileStat) == 0) {
+            printf("  - Setuid bit: %s\n", (fileStat.st_mode & S_ISUID) ? "SET" : "NOT SET");
+            printf("  - Executable: %s\n", execPath);
+        } else {
+            printf("  - Setuid bit: Unable to check (stat failed)\n");
+        }
+    } else {
+        printf("  - Setuid bit: Unable to check (could not get executable path)\n");
     }
     
     // Check for required binaries
@@ -941,6 +969,7 @@ int main(int argc, const char * argv[]) {
         struct rlimit rl = {0, 0};
         if (setrlimit(RLIMIT_CORE, &rl) != 0) {
             fprintf(stderr, "Warning: Failed to disable core dumps\n");
+            safeLogMessage("Security: Failed to disable core dumps (errno=%d)", errno);
         }
         
         // Fix file descriptors first to ensure proper I/O
@@ -1098,42 +1127,62 @@ int main(int argc, const char * argv[]) {
             
             // Create launchd plist for recovery
             char plistPath[256];
-            snprintf(plistPath, sizeof(plistPath), "/tmp/com.bgwarp.recovery.%d.plist", getpid());
+            char plistTemplate[256];
+            snprintf(plistTemplate, sizeof(plistTemplate), "/tmp/com.bgwarp.recovery.%d.XXXXXX.plist", getpid());
             
-            FILE *plist = fopen(plistPath, "w");
-            if (plist) {
-                fprintf(plist, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
-                fprintf(plist, "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n");
-                fprintf(plist, "<plist version=\"1.0\">\n");
-                fprintf(plist, "<dict>\n");
-                fprintf(plist, "    <key>Label</key>\n");
-                fprintf(plist, "    <string>com.bgwarp.recovery.%d</string>\n", getpid());
-                fprintf(plist, "    <key>ProgramArguments</key>\n");
-                fprintf(plist, "    <array>\n");
-                fprintf(plist, "        <string>/bin/sh</string>\n");
-                fprintf(plist, "        <string>-c</string>\n");
-                fprintf(plist, "        <string>sleep %d; logger -t bgwarp 'Auto-recovery: starting WARP reconnect after %d seconds'; %s connect 2>&1 | logger -t bgwarp; logger -t bgwarp 'Auto-recovery: warp-cli connect returned $?'; sleep 2; open -a 'Cloudflare WARP' 2>&1 | logger -t bgwarp; logger -t bgwarp 'Auto-recovery: launched WARP GUI'; launchctl unload %s</string>\n", 
-                        randomDelay, randomDelay, WARP_CLI_PATH, plistPath);
-                fprintf(plist, "    </array>\n");
-                fprintf(plist, "    <key>RunAtLoad</key>\n");
-                fprintf(plist, "    <true/>\n");
-                fprintf(plist, "    <key>AbandonProcessGroup</key>\n");
-                fprintf(plist, "    <true/>\n");
-                fprintf(plist, "</dict>\n");
-                fprintf(plist, "</plist>\n");
-                fclose(plist);
-                
-                // Load the launchd job
-                char loadCmd[512];
-                snprintf(loadCmd, sizeof(loadCmd), "launchctl load %s 2>/dev/null", plistPath);
-                system(loadCmd);
-                
-                safeLogMessage("Auto-recovery scheduled: base=%ds, actual=%ds (%dh %dm %ds), pid=%d", 
-                              reconnectBaseSeconds, randomDelay, hours, minutes, seconds, getpid());
-                
-                printf("    LaunchD job: com.bgwarp.recovery.%d\n", getpid());
-                printf("    Plist location: %s\n", plistPath);
+            // Create temporary file securely
+            int fd = mkstemps(plistTemplate, 6); // 6 for ".plist" suffix
+            if (fd == -1) {
+                fprintf(stderr, "[!] Failed to create recovery plist file: %s\n", strerror(errno));
+                safeLogMessage("Failed to create recovery plist file (errno=%d): %s", errno, strerror(errno));
+                return 0;
             }
+            
+            // Copy the actual filename for later use
+            strncpy(plistPath, plistTemplate, sizeof(plistPath) - 1);
+            plistPath[sizeof(plistPath) - 1] = '\0';
+            
+            FILE *plist = fdopen(fd, "w");
+            if (!plist) {
+                // fdopen failed, close the file descriptor and clean up
+                close(fd);
+                unlink(plistTemplate);
+                fprintf(stderr, "[!] Failed to open recovery plist file stream: %s\n", strerror(errno));
+                safeLogMessage("Failed to open recovery plist file stream (errno=%d): %s", errno, strerror(errno));
+                return 0;
+            }
+            
+            fprintf(plist, "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n");
+            fprintf(plist, "<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n");
+            fprintf(plist, "<plist version=\"1.0\">\n");
+            fprintf(plist, "<dict>\n");
+            fprintf(plist, "    <key>Label</key>\n");
+            fprintf(plist, "    <string>com.bgwarp.recovery.%d</string>\n", getpid());
+            fprintf(plist, "    <key>ProgramArguments</key>\n");
+            fprintf(plist, "    <array>\n");
+            fprintf(plist, "        <string>/bin/sh</string>\n");
+            fprintf(plist, "        <string>-c</string>\n");
+            fprintf(plist, "        <string>sleep %d; logger -t bgwarp 'Auto-recovery: starting WARP reconnect after %d seconds'; %s connect 2>&1 | logger -t bgwarp; logger -t bgwarp 'Auto-recovery: warp-cli connect returned $?'; sleep 2; open -a 'Cloudflare WARP' 2>&1 | logger -t bgwarp; logger -t bgwarp 'Auto-recovery: launched WARP GUI'; launchctl unload %s</string>\n", 
+                    randomDelay, randomDelay, WARP_CLI_PATH, plistPath);
+            fprintf(plist, "    </array>\n");
+            fprintf(plist, "    <key>RunAtLoad</key>\n");
+            fprintf(plist, "    <true/>\n");
+            fprintf(plist, "    <key>AbandonProcessGroup</key>\n");
+            fprintf(plist, "    <true/>\n");
+            fprintf(plist, "</dict>\n");
+            fprintf(plist, "</plist>\n");
+            fclose(plist);
+            
+            // Load the launchd job
+            char loadCmd[512];
+            snprintf(loadCmd, sizeof(loadCmd), "launchctl load %s 2>/dev/null", plistPath);
+            system(loadCmd);
+            
+            safeLogMessage("Auto-recovery scheduled: base=%ds, actual=%ds (%dh %dm %ds), pid=%d", 
+                          reconnectBaseSeconds, randomDelay, hours, minutes, seconds, getpid());
+            
+            printf("    LaunchD job: com.bgwarp.recovery.%d\n", getpid());
+            printf("    Plist location: %s\n", plistPath);
             } // End of auto-recovery enabled block
         } else {
             printf("\n[TEST] Test mode completed. No actual commands were executed.\n");
