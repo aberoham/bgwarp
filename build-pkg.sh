@@ -13,8 +13,8 @@ YELLOW='\033[1;33m'
 NC='\033[0m' # No Color
 
 # Configuration
-# Detect version from git tags, fall back to "dev" if not in a git repo or no tags
-VERSION=$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "dev")
+# Accept version as first parameter, or detect from git tags
+VERSION="${1:-$(git describe --tags --abbrev=0 2>/dev/null | sed 's/^v//' || echo "dev")}"
 if [ "$VERSION" = "dev" ]; then
     echo -e "${YELLOW}Warning: No git tags found, using version 'dev'${NC}"
     echo -e "${YELLOW}To create a release version, use: ./version.sh build --tag${NC}"

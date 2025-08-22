@@ -179,7 +179,7 @@ jobs:
     - name: Build universal package
       run: |
         chmod +x build-pkg.sh
-        ./build-pkg.sh
+        ./build-pkg.sh "${{ steps.version.outputs.VERSION }}"
         # Rename to indicate universal
         mv unwarp-${{ steps.version.outputs.VERSION }}.pkg unwarp-${{ steps.version.outputs.VERSION }}-universal.pkg
         if [ -f unwarp-${{ steps.version.outputs.VERSION }}-signed.pkg ]; then
@@ -193,7 +193,7 @@ jobs:
         
         # Build Intel package
         cp unwarp-x86_64 packaging/payload/usr/local/libexec/.unwarp
-        ./build-pkg.sh
+        ./build-pkg.sh "${{ steps.version.outputs.VERSION }}"
         mv unwarp-${{ steps.version.outputs.VERSION }}.pkg unwarp-${{ steps.version.outputs.VERSION }}-intel.pkg
         if [ -f unwarp-${{ steps.version.outputs.VERSION }}-signed.pkg ]; then
           mv unwarp-${{ steps.version.outputs.VERSION }}-signed.pkg unwarp-${{ steps.version.outputs.VERSION }}-intel-signed.pkg
@@ -201,7 +201,7 @@ jobs:
         
         # Build ARM64 package
         cp unwarp-arm64 packaging/payload/usr/local/libexec/.unwarp
-        ./build-pkg.sh
+        ./build-pkg.sh "${{ steps.version.outputs.VERSION }}"
         mv unwarp-${{ steps.version.outputs.VERSION }}.pkg unwarp-${{ steps.version.outputs.VERSION }}-arm64.pkg
         if [ -f unwarp-${{ steps.version.outputs.VERSION }}-signed.pkg ]; then
           mv unwarp-${{ steps.version.outputs.VERSION }}-signed.pkg unwarp-${{ steps.version.outputs.VERSION }}-arm64-signed.pkg
