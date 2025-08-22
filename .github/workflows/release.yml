@@ -54,10 +54,10 @@ jobs:
           chmod +x version.sh
           case "${{ github.event.inputs.release_type }}" in
             patch)
-              VERSION=$(./version.sh patch | grep "New version:" | awk '{print $3}')
+              VERSION=$(./version.sh patch | grep "New version:" | awk '{print $3}' | sed 's/\x1b\[[0-9;]*m//g')
               ;;
             build)
-              VERSION=$(./version.sh build | grep "New version:" | awk '{print $3}')
+              VERSION=$(./version.sh build | grep "New version:" | awk '{print $3}' | sed 's/\x1b\[[0-9;]*m//g')
               ;;
             custom)
               VERSION="${{ github.event.inputs.custom_version }}"
@@ -136,10 +136,10 @@ jobs:
           chmod +x version.sh
           case "${{ github.event.inputs.release_type }}" in
             patch)
-              VERSION=$(./version.sh patch | grep "New version:" | awk '{print $3}')
+              VERSION=$(./version.sh patch | grep "New version:" | awk '{print $3}' | sed 's/\x1b\[[0-9;]*m//g')
               ;;
             build)
-              VERSION=$(./version.sh build | grep "New version:" | awk '{print $3}')
+              VERSION=$(./version.sh build | grep "New version:" | awk '{print $3}' | sed 's/\x1b\[[0-9;]*m//g')
               ;;
             custom)
               VERSION="${{ github.event.inputs.custom_version }}"
