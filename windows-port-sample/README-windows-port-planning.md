@@ -1,12 +1,12 @@
-# Windows Port Planning Document for bgwarp
+# Windows Port Planning Document for unwarp
 
 ## Executive Summary
 
-This document outlines the plan to port the bgwarp (break glass WARP) utility from macOS to Windows. After analyzing the codebase and researching cross-platform approaches used by similar utilities (including Cloudflare's own tools), we recommend creating a separate Windows-specific implementation rather than attempting to share code between platforms.
+This document outlines the plan to port the unwarp utility from macOS to Windows. After analyzing the codebase and researching cross-platform approaches used by similar utilities (including Cloudflare's own tools), we recommend creating a separate Windows-specific implementation rather than attempting to share code between platforms.
 
 ## Current macOS Implementation Overview
 
-The macOS version of bgwarp is a 1,100-line Objective-C program that:
+The macOS version of unwarp is a 1,100-line Objective-C program that:
 - Uses Touch ID authentication via LocalAuthentication framework
 - Runs as a setuid binary for privilege escalation
 - Forcefully disconnects Cloudflare WARP during outages
@@ -17,7 +17,7 @@ The macOS version of bgwarp is a 1,100-line Objective-C program that:
 
 ### Fundamental Differences
 
-Windows lacks several macOS constructs that bgwarp relies on:
+Windows lacks several macOS constructs that unwarp relies on:
 - **No setuid binaries**: Windows uses different privilege models
 - **No Touch ID framework**: Windows Hello provides biometric authentication
 - **No launchd**: Windows Task Scheduler handles scheduled tasks
@@ -27,7 +27,7 @@ Windows lacks several macOS constructs that bgwarp relies on:
 
 ```
 ┌─────────────────────┐     Named Pipe IPC    ┌─────────────────────┐
-│   BgwarpClient.exe  │◄──────────────────────►│  BgwarpService.exe  │
+│   UnwarpClient.exe  │◄──────────────────────►│  UnwarpService.exe  │
 │  (User Interface)   │                        │   (SYSTEM Service)  │
 │ - Windows Hello Auth│                        │ - WARP Operations   │
 │ - User Interaction  │                        │ - Network Recovery  │
@@ -143,12 +143,12 @@ Windows lacks several macOS constructs that bgwarp relies on:
 ## Project Structure
 
 ```
-bgwarp-windows/
+unwarp-windows/
 ├── src/
-│   ├── BgwarpService/      # Windows Service project
-│   ├── BgwarpClient/       # Client application
-│   ├── BgwarpCommon/       # Shared utilities
-│   └── BgwarpInstaller/    # MSI installer project
+│   ├── UnwarpService/      # Windows Service project
+│   ├── UnwarpClient/       # Client application
+│   ├── UnwarpCommon/       # Shared utilities
+│   └── UnwarpInstaller/    # MSI installer project
 ├── tests/
 │   ├── ServiceTests/
 │   ├── ClientTests/
@@ -200,7 +200,7 @@ bgwarp-windows/
 
 ## Conclusion
 
-Creating a separate Windows-specific implementation of bgwarp is the recommended approach. While this requires maintaining two codebases, it allows each version to fully leverage platform-specific security features and provides the best user experience on each operating system.
+Creating a separate Windows-specific implementation of unwarp is the recommended approach. While this requires maintaining two codebases, it allows each version to fully leverage platform-specific security features and provides the best user experience on each operating system.
 
 The Windows version will achieve functional parity with the macOS version while respecting Windows security models and enterprise deployment requirements. The service/client architecture actually provides better privilege separation than the macOS setuid approach, making it arguably more secure.
 
@@ -208,7 +208,7 @@ The Windows version will achieve functional parity with the macOS version while 
 
 1. Review and approve this planning document
 2. Set up Windows development environment
-3. Create bgwarp-windows repository
+3. Create unwarp-windows repository
 4. Begin Phase 1 implementation
 5. Schedule weekly progress reviews
 
@@ -217,7 +217,7 @@ The Windows version will achieve functional parity with the macOS version while 
 ### Service Communication Protocol
 ```csharp
 // Message format for named pipe communication
-public class BgwarpMessage {
+public class UnwarpMessage {
     public string Command { get; set; }  // "disconnect", "status", "recover"
     public bool TestMode { get; set; }
     public string UserSid { get; set; }
@@ -231,7 +231,7 @@ public class BgwarpMessage {
 // Simplified authentication flow
 public async Task<bool> AuthenticateUser() {
     var result = await WindowsHelloAuthentication.RequestVerificationAsync(
-        "Bgwarp requires authentication to disconnect WARP");
+        "Unwarp requires authentication to disconnect WARP");
     
     if (result == UserConsentVerificationResult.Verified) {
         LogAuthentication(true);
@@ -249,7 +249,7 @@ public async Task<bool> AuthenticateUser() {
 public void ScheduleRecovery(int delaySeconds) {
     using (TaskService ts = new TaskService()) {
         TaskDefinition td = ts.NewTask();
-        td.RegistrationInfo.Description = "Bgwarp WARP Recovery";
+        td.RegistrationInfo.Description = "Unwarp WARP Recovery";
         td.Principal.RunLevel = TaskRunLevel.Highest;
         
         td.Triggers.Add(new TimeTrigger {
@@ -257,11 +257,11 @@ public void ScheduleRecovery(int delaySeconds) {
             Enabled = true
         });
         
-        td.Actions.Add(new ExecAction("bgwarp.exe", "--recover"));
+        td.Actions.Add(new ExecAction("unwarp.exe", "--recover"));
         td.Settings.DeleteExpiredTaskAfter = TimeSpan.FromMinutes(5);
         
         ts.RootFolder.RegisterTaskDefinition(
-            $"BgwarpRecovery_{Process.GetCurrentProcess().Id}", 
+            $"UnwarpRecovery_{Process.GetCurrentProcess().Id}", 
             td);
     }
 }

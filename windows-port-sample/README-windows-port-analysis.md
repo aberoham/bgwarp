@@ -1,8 +1,8 @@
-# Windows Port Analysis for bgwarp
+# Windows Port Analysis for unwarp
 
 ## Executive Summary
 
-Porting bgwarp from macOS to Windows would be a complex endevour requiring fundamental architectural changes. While the core functionality of WARP disconnection and network recovery has Windows equivalents, the security model, authentication system, and privilege management would need complete redesign.
+Porting unwarp from macOS to Windows would be a complex endevour requiring fundamental architectural changes. While the core functionality of WARP disconnection and network recovery has Windows equivalents, the security model, authentication system, and privilege management would need complete redesign.
 
 ## Detailed Feature Mapping
 
@@ -11,7 +11,7 @@ Porting bgwarp from macOS to Windows would be a complex endevour requiring funda
 #### macOS Implementation
 - **Technology**: LocalAuthentication framework with Touch ID
 - **Fallback**: System password via `LAPolicyDeviceOwnerAuthentication`
-- **Code Location**: Lines 535-690 in bgwarp.m
+- **Code Location**: Lines 535-690 in unwarp.m
 - **Features**:
   - Biometric authentication priority
   - 30-second timeout
@@ -57,7 +57,7 @@ private async Task<bool> AuthenticateWithWindowsHello()
 
 #### macOS Implementation
 - **Model**: Setuid binary (4755 permissions)
-- **Installation**: `/usr/local/libexec/.bgwarp`
+- **Installation**: `/usr/local/libexec/.unwarp`
 - **Privilege Operations**:
   - Drop privileges for authentication (seteuid/setegid)
   - Restore root privileges after authentication
@@ -68,7 +68,7 @@ private async Task<bool> AuthenticateWithWindowsHello()
 **Option 1: Windows Service (Recommended)**
 ```csharp
 // Service running as SYSTEM
-public class BgwarpService : ServiceBase
+public class UnwarpService : ServiceBase
 {
     protected override void OnCustomCommand(int command)
     {
@@ -194,7 +194,7 @@ private void ScheduleAutoRecovery(int baseSeconds)
     using (var ts = new TaskService())
     {
         var td = ts.NewTask();
-        td.RegistrationInfo.Description = "bgwarp auto-recovery";
+        td.RegistrationInfo.Description = "unwarp auto-recovery";
         td.Settings.DeleteExpiredTaskAfter = TimeSpan.FromMinutes(1);
         
         td.Triggers.Add(new TimeTrigger(triggerTime) { Enabled = true });
@@ -205,10 +205,10 @@ private void ScheduleAutoRecovery(int baseSeconds)
         
         // Self-delete action
         td.Actions.Add(new ExecAction("schtasks.exe", 
-            $"/delete /tn \"bgwarp-recovery-{Process.GetCurrentProcess().Id}\" /f"));
+            $"/delete /tn \"unwarp-recovery-{Process.GetCurrentProcess().Id}\" /f"));
         
         ts.RootFolder.RegisterTaskDefinition(
-            $"bgwarp-recovery-{Process.GetCurrentProcess().Id}",
+            $"unwarp-recovery-{Process.GetCurrentProcess().Id}",
             td,
             TaskCreation.Create,
             "SYSTEM",
@@ -222,7 +222,7 @@ private void ScheduleAutoRecovery(int baseSeconds)
 
 #### macOS Logging
 - Uses `syslog()` and `logger` command
-- Logs to system log with subsystem "bgwarp"
+- Logs to system log with subsystem "unwarp"
 - Can query with `log show` command
 
 #### Windows Event Log
@@ -231,7 +231,7 @@ private static EventLog _eventLog;
 
 private static void InitializeLogging()
 {
-    string source = "bgwarp";
+    string source = "unwarp";
     string log = "Application";
     
     if (!EventLog.SourceExists(source))
@@ -274,7 +274,7 @@ Would need to be reimplemented using Windows Registry or isolated storage:
 ```csharp
 private bool CheckRateLimit()
 {
-    using (var key = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\bgwarp"))
+    using (var key = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\unwarp"))
     {
         var attempts = (int)(key.GetValue("AuthAttempts", 0));
         var lastAttempt = (long)(key.GetValue("LastAttempt", 0));
@@ -312,7 +312,7 @@ private bool CheckRateLimit()
 
 ### 3. Deployment Strategy
 - MSI installer using WiX Toolset
-- Install service to `%ProgramFiles%\bgwarp\`
+- Install service to `%ProgramFiles%\unwarp\`
 - Hide from Programs and Features
 - Document in incident playbooks only
 
@@ -338,6 +338,6 @@ private bool CheckRateLimit()
 
 ## Conclusion
 
-While technically feasible, porting bgwarp to Windows requires significant effort due to fundamental platform differences. The security model, in particular, would need complete redesign. However, all core functionality can be replicated using Windows-native technologies.
+While technically feasible, porting unwarp to Windows requires significant effort due to fundamental platform differences. The security model, in particular, would need complete redesign. However, all core functionality can be replicated using Windows-native technologies.
 
 The recommended approach is to build a Windows Service with a separate client application, using C# and modern Windows APIs. This would provide the necessary privilege separation while maintaining the security requirements of the original tool.

@@ -8,14 +8,14 @@ using System.Threading.Tasks;
 using Microsoft.Win32;
 using Windows.Security.Credentials.UI;
 
-namespace Bgwarp.Windows
+namespace Unwarp.Windows
 {
     /// <summary>
-    /// Client application for bgwarp that handles authentication and communicates with the service
+    /// Client application for unwarp that handles authentication and communicates with the service
     /// </summary>
-    public class BgwarpClient
+    public class UnwarpClient
     {
-        private const string PIPE_NAME = "BgwarpServicePipe";
+        private const string PIPE_NAME = "UnwarpServicePipe";
         private const int MAX_AUTH_ATTEMPTS = 3;
         private const int AUTH_LOCKOUT_SECONDS = 60;
         private const int AUTH_BACKOFF_SECONDS = 5;
@@ -174,7 +174,7 @@ namespace Bgwarp.Windows
         {
             Console.WriteLine("Emergency WARP disconnect tool for Windows");
             Console.WriteLine();
-            Console.WriteLine("Usage: bgwarp.exe [OPTIONS]");
+            Console.WriteLine("Usage: unwarp.exe [OPTIONS]");
             Console.WriteLine();
             Console.WriteLine("Options:");
             Console.WriteLine("  --liveincident    Execute in live mode (destructive actions)");
@@ -184,7 +184,7 @@ namespace Bgwarp.Windows
             Console.WriteLine("  --help, -h, /?    Print this help message");
             Console.WriteLine();
             Console.WriteLine("Description:");
-            Console.WriteLine("  bgwarp (break glass WARP) is an emergency tool that forcefully");
+            Console.WriteLine("  unwarp (break glass WARP) is an emergency tool that forcefully");
             Console.WriteLine("  disconnects Cloudflare WARP during outages when the dashboard");
             Console.WriteLine("  is inaccessible. It requires Windows Hello authentication and");
             Console.WriteLine("  administrator privileges.");
@@ -208,9 +208,9 @@ namespace Bgwarp.Windows
             Console.WriteLine("  - Schedule WARP reconnection");
             Console.WriteLine();
             Console.WriteLine("Example:");
-            Console.WriteLine("  bgwarp.exe                  # Run in test mode");
-            Console.WriteLine("  bgwarp.exe --liveincident   # Run in live mode");
-            Console.WriteLine("  bgwarp.exe --liveincident --reconnect 300  # 5 min base reconnect");
+            Console.WriteLine("  unwarp.exe                  # Run in test mode");
+            Console.WriteLine("  unwarp.exe --liveincident   # Run in live mode");
+            Console.WriteLine("  unwarp.exe --liveincident --reconnect 300  # 5 min base reconnect");
         }
 
         private static bool IsRunningAsAdministrator()
@@ -291,7 +291,7 @@ namespace Bgwarp.Windows
         {
             try
             {
-                using (var key = Registry.CurrentUser.CreateSubKey(@"SOFTWARE\bgwarp"))
+                using (var key = Registry.CurrentUser.CreateSubKey(@"SOFTWARE\unwarp"))
                 {
                     var attempts = (int)(key.GetValue("AuthAttempts", 0) ?? 0);
                     var lastAttemptTicks = (long)(key.GetValue("LastAttempt", 0) ?? 0);
@@ -356,7 +356,7 @@ namespace Bgwarp.Windows
         {
             try
             {
-                using (var key = Registry.CurrentUser.CreateSubKey(@"SOFTWARE\bgwarp"))
+                using (var key = Registry.CurrentUser.CreateSubKey(@"SOFTWARE\unwarp"))
                 {
                     if (success)
                     {
@@ -398,11 +398,11 @@ namespace Bgwarp.Windows
             Console.WriteLine("[TEST] Service Status:");
             if (CheckServiceStatus())
             {
-                Console.WriteLine("  ✓ Bgwarp service is running");
+                Console.WriteLine("  ✓ Unwarp service is running");
             }
             else
             {
-                Console.WriteLine("  ✗ Bgwarp service is not running or not installed");
+                Console.WriteLine("  ✗ Unwarp service is not running or not installed");
             }
             Console.WriteLine();
 
@@ -422,7 +422,7 @@ namespace Bgwarp.Windows
             // Store reconnect time for service
             try
             {
-                using (var key = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\bgwarp"))
+                using (var key = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\unwarp"))
                 {
                     key.SetValue("ReconnectBaseSeconds", _reconnectSeconds);
                 }
@@ -460,7 +460,7 @@ namespace Bgwarp.Windows
             // Store reconnect time for service
             try
             {
-                using (var key = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\bgwarp"))
+                using (var key = Registry.LocalMachine.CreateSubKey(@"SOFTWARE\unwarp"))
                 {
                     key.SetValue("ReconnectBaseSeconds", _reconnectSeconds);
                 }
@@ -471,7 +471,7 @@ namespace Bgwarp.Windows
             {
                 using (var pipe = new NamedPipeClientStream(".", PIPE_NAME, PipeDirection.InOut))
                 {
-                    Console.WriteLine("[*] Connecting to bgwarp service...");
+                    Console.WriteLine("[*] Connecting to unwarp service...");
                     pipe.Connect(5000); // 5 second timeout
 
                     using (var writer = new StreamWriter(pipe) { AutoFlush = true })
@@ -496,12 +496,12 @@ namespace Bgwarp.Windows
         {
             try
             {
-                if (!EventLog.SourceExists("bgwarp"))
+                if (!EventLog.SourceExists("unwarp"))
                 {
-                    EventLog.CreateEventSource("bgwarp", "Application");
+                    EventLog.CreateEventSource("unwarp", "Application");
                 }
 
-                EventLog.WriteEntry("bgwarp", $"Client: {message}", type);
+                EventLog.WriteEntry("unwarp", $"Client: {message}", type);
             }
             catch
             {

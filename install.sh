@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Installation script for bgwarp emergency tool
+# Installation script for unwarp emergency tool
 # This must be run with sudo
 
 set -e
@@ -13,13 +13,13 @@ if [ "$EUID" -ne 0 ]; then
 fi
 
 # Check if binary exists
-if [ ! -f "bgwarp" ]; then
-    echo "Error: bgwarp binary not found!"
+if [ ! -f "unwarp" ]; then
+    echo "Error: unwarp binary not found!"
     echo "Please run ./build.sh first"
     exit 1
 fi
 
-echo "Installing bgwarp emergency tool..."
+echo "Installing unwarp emergency tool..."
 
 # Create hidden directory if it doesn't exist
 INSTALL_DIR="/usr/local/libexec"
@@ -29,26 +29,26 @@ if [ ! -d "$INSTALL_DIR" ]; then
 fi
 
 # Copy binary to hidden location
-echo "Installing to: $INSTALL_DIR/.bgwarp"
-cp bgwarp "$INSTALL_DIR/.bgwarp"
+echo "Installing to: $INSTALL_DIR/.unwarp"
+cp unwarp "$INSTALL_DIR/.unwarp"
 
 # Set proper ownership and permissions
 echo "Setting ownership to root:wheel..."
-chown root:wheel "$INSTALL_DIR/.bgwarp"
+chown root:wheel "$INSTALL_DIR/.unwarp"
 
 echo "Setting setuid permissions (4755)..."
-chmod 4755 "$INSTALL_DIR/.bgwarp"
+chmod 4755 "$INSTALL_DIR/.unwarp"
 
 # Verify installation
-if [ -f "$INSTALL_DIR/.bgwarp" ]; then
+if [ -f "$INSTALL_DIR/.unwarp" ]; then
     echo ""
     echo "✓ Installation complete!"
     echo ""
     echo "The emergency tool is installed at:"
-    echo "  $INSTALL_DIR/.bgwarp"
+    echo "  $INSTALL_DIR/.unwarp"
     echo ""
     echo "To use in an emergency:"
-    echo "  $INSTALL_DIR/.bgwarp --liveincident"
+    echo "  $INSTALL_DIR/.unwarp --liveincident"
     echo ""
     echo "This tool requires Touch ID authentication and will:"
     echo "  - Disconnect WARP"

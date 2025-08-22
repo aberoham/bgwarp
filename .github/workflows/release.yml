@@ -20,7 +20,7 @@ on:
         required: false
 
 env:
-  BINARY_NAME: bgwarp
+  BINARY_NAME: unwarp
 
 jobs:
   build:
@@ -78,13 +78,13 @@ jobs:
         # Pass version to build script
         ./build.sh "${{ steps.version.outputs.VERSION }}"
         # Rename binary with architecture
-        mv bgwarp bgwarp-${{ matrix.arch }}
+        mv unwarp unwarp-${{ matrix.arch }}
 
     - name: Upload architecture-specific binary
       uses: actions/upload-artifact@v4
       with:
-        name: bgwarp-${{ matrix.arch }}
-        path: bgwarp-${{ matrix.arch }}
+        name: unwarp-${{ matrix.arch }}
+        path: unwarp-${{ matrix.arch }}
         if-no-files-found: error
 
   create-universal-binary:
@@ -103,26 +103,26 @@ jobs:
     - name: Download Intel binary
       uses: actions/download-artifact@v4
       with:
-        name: bgwarp-x86_64
+        name: unwarp-x86_64
         path: .
 
     - name: Download ARM64 binary
       uses: actions/download-artifact@v4
       with:
-        name: bgwarp-arm64
+        name: unwarp-arm64
         path: .
 
     - name: Create universal binary
       run: |
         # Create universal binary
-        lipo -create -output bgwarp bgwarp-x86_64 bgwarp-arm64
+        lipo -create -output unwarp unwarp-x86_64 unwarp-arm64
         
         # Verify architectures
         echo "Universal binary architectures:"
-        lipo -info bgwarp
+        lipo -info unwarp
         
         # Make it executable
-        chmod +x bgwarp
+        chmod +x unwarp
 
     - name: Determine version
       id: version
@@ -163,14 +163,14 @@ jobs:
         # Create postinstall script using printf to avoid heredoc issues
         printf '#!/bin/bash\n' > packaging/scripts/postinstall
         printf 'set -e\n' >> packaging/scripts/postinstall
-        printf 'INSTALL_PATH="/usr/local/libexec/.bgwarp"\n' >> packaging/scripts/postinstall
+        printf 'INSTALL_PATH="/usr/local/libexec/.unwarp"\n' >> packaging/scripts/postinstall
         printf 'if [ -f "$INSTALL_PATH" ]; then\n' >> packaging/scripts/postinstall
         printf '    chown root:wheel "$INSTALL_PATH"\n' >> packaging/scripts/postinstall
         printf '    chmod 4755 "$INSTALL_PATH"\n' >> packaging/scripts/postinstall
-        printf '    echo "bgwarp: Set setuid permissions on $INSTALL_PATH"\n' >> packaging/scripts/postinstall
-        printf '    logger -t bgwarp-installer "Installation completed successfully"\n' >> packaging/scripts/postinstall
+        printf '    echo "unwarp: Set setuid permissions on $INSTALL_PATH"\n' >> packaging/scripts/postinstall
+        printf '    logger -t unwarp-installer "Installation completed successfully"\n' >> packaging/scripts/postinstall
         printf 'else\n' >> packaging/scripts/postinstall
-        printf '    echo "bgwarp: Warning - $INSTALL_PATH not found"\n' >> packaging/scripts/postinstall
+        printf '    echo "unwarp: Warning - $INSTALL_PATH not found"\n' >> packaging/scripts/postinstall
         printf '    exit 1\n' >> packaging/scripts/postinstall
         printf 'fi\n' >> packaging/scripts/postinstall
         printf 'exit 0\n' >> packaging/scripts/postinstall
@@ -181,9 +181,9 @@ jobs:
         chmod +x build-pkg.sh
         ./build-pkg.sh
         # Rename to indicate universal
-        mv bgwarp-${{ steps.version.outputs.VERSION }}.pkg bgwarp-${{ steps.version.outputs.VERSION }}-universal.pkg
-        if [ -f bgwarp-${{ steps.version.outputs.VERSION }}-signed.pkg ]; then
-          mv bgwarp-${{ steps.version.outputs.VERSION }}-signed.pkg bgwarp-${{ steps.version.outputs.VERSION }}-universal-signed.pkg
+        mv unwarp-${{ steps.version.outputs.VERSION }}.pkg unwarp-${{ steps.version.outputs.VERSION }}-universal.pkg
+        if [ -f unwarp-${{ steps.version.outputs.VERSION }}-signed.pkg ]; then
+          mv unwarp-${{ steps.version.outputs.VERSION }}-signed.pkg unwarp-${{ steps.version.outputs.VERSION }}-universal-signed.pkg
         fi
 
     - name: Build architecture-specific packages
@@ -192,32 +192,32 @@ jobs:
         mkdir -p packaging/payload/usr/local/libexec
         
         # Build Intel package
-        cp bgwarp-x86_64 packaging/payload/usr/local/libexec/.bgwarp
+        cp unwarp-x86_64 packaging/payload/usr/local/libexec/.unwarp
         ./build-pkg.sh
-        mv bgwarp-${{ steps.version.outputs.VERSION }}.pkg bgwarp-${{ steps.version.outputs.VERSION }}-intel.pkg
-        if [ -f bgwarp-${{ steps.version.outputs.VERSION }}-signed.pkg ]; then
-          mv bgwarp-${{ steps.version.outputs.VERSION }}-signed.pkg bgwarp-${{ steps.version.outputs.VERSION }}-intel-signed.pkg
+        mv unwarp-${{ steps.version.outputs.VERSION }}.pkg unwarp-${{ steps.version.outputs.VERSION }}-intel.pkg
+        if [ -f unwarp-${{ steps.version.outputs.VERSION }}-signed.pkg ]; then
+          mv unwarp-${{ steps.version.outputs.VERSION }}-signed.pkg unwarp-${{ steps.version.outputs.VERSION }}-intel-signed.pkg
         fi
         
         # Build ARM64 package
-        cp bgwarp-arm64 packaging/payload/usr/local/libexec/.bgwarp
+        cp unwarp-arm64 packaging/payload/usr/local/libexec/.unwarp
         ./build-pkg.sh
-        mv bgwarp-${{ steps.version.outputs.VERSION }}.pkg bgwarp-${{ steps.version.outputs.VERSION }}-arm64.pkg
-        if [ -f bgwarp-${{ steps.version.outputs.VERSION }}-signed.pkg ]; then
-          mv bgwarp-${{ steps.version.outputs.VERSION }}-signed.pkg bgwarp-${{ steps.version.outputs.VERSION }}-arm64-signed.pkg
+        mv unwarp-${{ steps.version.outputs.VERSION }}.pkg unwarp-${{ steps.version.outputs.VERSION }}-arm64.pkg
+        if [ -f unwarp-${{ steps.version.outputs.VERSION }}-signed.pkg ]; then
+          mv unwarp-${{ steps.version.outputs.VERSION }}-signed.pkg unwarp-${{ steps.version.outputs.VERSION }}-arm64-signed.pkg
         fi
 
     - name: Calculate checksums
       id: checksums
       run: |
         # Calculate checksums for all artifacts
-        shasum -a 256 bgwarp > bgwarp.sha256
-        shasum -a 256 bgwarp-x86_64 >> bgwarp.sha256
-        shasum -a 256 bgwarp-arm64 >> bgwarp.sha256
-        shasum -a 256 bgwarp-*.pkg >> bgwarp.sha256
+        shasum -a 256 unwarp > unwarp.sha256
+        shasum -a 256 unwarp-x86_64 >> unwarp.sha256
+        shasum -a 256 unwarp-arm64 >> unwarp.sha256
+        shasum -a 256 unwarp-*.pkg >> unwarp.sha256
         
         # Also create individual checksum files
-        for file in bgwarp bgwarp-x86_64 bgwarp-arm64 bgwarp-*.pkg; do
+        for file in unwarp unwarp-x86_64 unwarp-arm64 unwarp-*.pkg; do
           if [ -f "$file" ]; then
             shasum -a 256 "$file" > "${file}.sha256"
           fi
@@ -225,7 +225,7 @@ jobs:
         
         # Output for release notes
         echo "CHECKSUMS<<EOF" >> $GITHUB_OUTPUT
-        cat bgwarp.sha256 >> $GITHUB_OUTPUT
+        cat unwarp.sha256 >> $GITHUB_OUTPUT
         echo "EOF" >> $GITHUB_OUTPUT
 
     - name: Generate release notes
@@ -235,44 +235,44 @@ jobs:
         LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
         
         cat > release_notes.md << EOF
-        ## bgwarp ${{ steps.version.outputs.VERSION }}
+        ## unwarp ${{ steps.version.outputs.VERSION }}
         
         Emergency disconnect tool for Cloudflare WARP on macOS. Enables privileged incident responders to forcefully disconnect WARP during outages when the Cloudflare WARP control and/or data plane are misbehaving.
         
         ### Downloads
         
         **Recommended: Universal Package (works on all Macs)**
-        - [\`bgwarp-${{ steps.version.outputs.VERSION }}-universal.pkg\`](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/bgwarp-${{ steps.version.outputs.VERSION }}-universal.pkg) - Works on both Intel and Apple Silicon Macs
+        - [\`unwarp-${{ steps.version.outputs.VERSION }}-universal.pkg\`](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/unwarp-${{ steps.version.outputs.VERSION }}-universal.pkg) - Works on both Intel and Apple Silicon Macs
         
         **Architecture-Specific Packages**
-        - [\`bgwarp-${{ steps.version.outputs.VERSION }}-intel.pkg\`](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/bgwarp-${{ steps.version.outputs.VERSION }}-intel.pkg) - Intel Macs only
-        - [\`bgwarp-${{ steps.version.outputs.VERSION }}-arm64.pkg\`](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/bgwarp-${{ steps.version.outputs.VERSION }}-arm64.pkg) - Apple Silicon Macs only
+        - [\`unwarp-${{ steps.version.outputs.VERSION }}-intel.pkg\`](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/unwarp-${{ steps.version.outputs.VERSION }}-intel.pkg) - Intel Macs only
+        - [\`unwarp-${{ steps.version.outputs.VERSION }}-arm64.pkg\`](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/unwarp-${{ steps.version.outputs.VERSION }}-arm64.pkg) - Apple Silicon Macs only
         
         **Raw Binaries (for manual installation)**
-        - [\`bgwarp\`](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/bgwarp) - Universal binary (Intel + Apple Silicon)
-        - [\`bgwarp-x86_64\`](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/bgwarp-x86_64) - Intel only
-        - [\`bgwarp-arm64\`](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/bgwarp-arm64) - Apple Silicon only
+        - [\`unwarp\`](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/unwarp) - Universal binary (Intel + Apple Silicon)
+        - [\`unwarp-x86_64\`](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/unwarp-x86_64) - Intel only
+        - [\`unwarp-arm64\`](https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/unwarp-arm64) - Apple Silicon only
         
         ### Installation
         
         **Option 1: Package Installer (Recommended for JAMF)**
         \`\`\`bash
         # Download and install the universal package
-        curl -LO https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/bgwarp-${{ steps.version.outputs.VERSION }}-universal.pkg
-        sudo installer -pkg bgwarp-${{ steps.version.outputs.VERSION }}-universal.pkg -target /
+        curl -LO https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/unwarp-${{ steps.version.outputs.VERSION }}-universal.pkg
+        sudo installer -pkg unwarp-${{ steps.version.outputs.VERSION }}-universal.pkg -target /
         \`\`\`
         
         **Option 2: Direct Binary Installation**
         \`\`\`bash
         # Download universal binary
-        curl -LO https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/bgwarp
-        chmod +x bgwarp
+        curl -LO https://github.com/${{ github.repository }}/releases/download/${{ steps.version.outputs.VERSION_TAG }}/unwarp
+        chmod +x unwarp
         
         # Install with proper permissions
         sudo mkdir -p /usr/local/libexec
-        sudo cp bgwarp /usr/local/libexec/.bgwarp
-        sudo chown root:wheel /usr/local/libexec/.bgwarp
-        sudo chmod 4755 /usr/local/libexec/.bgwarp
+        sudo cp unwarp /usr/local/libexec/.unwarp
+        sudo chown root:wheel /usr/local/libexec/.unwarp
+        sudo chmod 4755 /usr/local/libexec/.unwarp
         \`\`\`
         
         ### Architecture Support
@@ -294,7 +294,7 @@ jobs:
         echo "" >> release_notes.md
         echo "### Checksums" >> release_notes.md
         echo "\`\`\`" >> release_notes.md
-        cat bgwarp.sha256 >> release_notes.md
+        cat unwarp.sha256 >> release_notes.md
         echo "\`\`\`" >> release_notes.md
         
         echo "RELEASE_NOTES<<EOF" >> $GITHUB_OUTPUT
@@ -305,16 +305,16 @@ jobs:
       uses: softprops/action-gh-release@v2
       with:
         tag_name: ${{ steps.version.outputs.VERSION_TAG }}
-        name: bgwarp ${{ steps.version.outputs.VERSION }}
+        name: unwarp ${{ steps.version.outputs.VERSION }}
         body: ${{ steps.release_notes.outputs.RELEASE_NOTES }}
         draft: false
         prerelease: false
         files: |
-          bgwarp
-          bgwarp-x86_64
-          bgwarp-arm64
-          bgwarp-*.pkg
-          bgwarp*.sha256
+          unwarp
+          unwarp-x86_64
+          unwarp-arm64
+          unwarp-*.pkg
+          unwarp*.sha256
 
     - name: Update latest tag
       run: |

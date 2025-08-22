@@ -19,8 +19,8 @@
 #import <mach-o/dyld.h>
 
 // Version information - can be overridden at compile time
-#ifndef BGWARP_VERSION
-#define BGWARP_VERSION "dev"
+#ifndef UNWARP_VERSION
+#define UNWARP_VERSION "dev"
 #endif
 
 #define WARP_CLI_PATH "/usr/local/bin/warp-cli"
@@ -461,7 +461,7 @@ static void logAuthAttempt(BOOL success, const char *reason) {
     }
     
     // Use syslog for critical security events
-    openlog("bgwarp", LOG_PID | LOG_NDELAY, LOG_AUTH);
+    openlog("unwarp", LOG_PID | LOG_NDELAY, LOG_AUTH);
     syslog(success ? LOG_INFO : LOG_WARNING,
            "auth %s for user %s (uid=%u) on %s, ppid=%d: %s",
            success ? "success" : "failure",
@@ -784,9 +784,9 @@ static void showVersion(void) {
 #elif defined(__arm64__) || defined(__aarch64__)
     arch = "arm64";
 #endif
-    printf("bgwarp version %s (%s)\n", BGWARP_VERSION, arch);
+    printf("unwarp version %s (%s)\n", UNWARP_VERSION, arch);
     printf("Emergency WARP disconnect tool for macOS\n");
-    printf("Copyright (c) 2025 bgwarp contributors - Licensed under MIT\n");
+    printf("Copyright (c) 2025 unwarp contributors - Licensed under MIT\n");
 }
 
 static void showHelp(const char *programName) {
@@ -805,7 +805,7 @@ static void showHelp(const char *programName) {
     printf("  --help, -h        Print this help message\n");
     printf("\n");
     printf("Description:\n");
-    printf("  bgwarp (break glass WARP) is an emergency tool that forcefully\n");
+    printf("  unwarp is an emergency tool that forcefully\n");
     printf("  disconnects Cloudflare WARP during outages when the dashboard\n");
     printf("  is inaccessible. It requires Touch ID authentication and must\n");
     printf("  be installed with setuid root privileges.\n");
@@ -848,18 +848,18 @@ static void showHelp(const char *programName) {
     printf("  %s --liveincident --no-recovery  # No auto-reconnection\n", programName);
     printf("\n");
     printf("Debugging:\n");
-    printf("  View bgwarp logs:\n");
-    printf("    log show --predicate 'subsystem == \"bgwarp\"' --last 1h\n");
-    printf("    log show --predicate 'process == \"logger\" AND eventMessage CONTAINS \"bgwarp\"' --last 1h\n");
+    printf("  View unwarp logs:\n");
+    printf("    log show --predicate 'subsystem == \"unwarp\"' --last 1h\n");
+    printf("    log show --predicate 'process == \"logger\" AND eventMessage CONTAINS \"unwarp\"' --last 1h\n");
     printf("\n");
     printf("  List active recovery jobs:\n");
-    printf("    launchctl list | grep bgwarp.recovery\n");
+    printf("    launchctl list | grep unwarp.recovery\n");
     printf("\n");
     printf("  View recovery job details:\n");
-    printf("    launchctl print gui/$(id -u)/com.bgwarp.recovery.PID\n");
+    printf("    launchctl print gui/$(id -u)/com.unwarp.recovery.PID\n");
     printf("\n");
     printf("  Manually cancel recovery:\n");
-    printf("    launchctl unload /tmp/com.bgwarp.recovery.*.plist\n");
+    printf("    launchctl unload /tmp/com.unwarp.recovery.*.plist\n");
     printf("\n");
 }
 
@@ -895,7 +895,7 @@ static void safeLogMessage(const char *format, ...) {
     safe_message[j] = '\0';
     
     // Use syslog directly instead of system() with logger
-    openlog("bgwarp", LOG_PID | LOG_NDELAY, LOG_USER);
+    openlog("unwarp", LOG_PID | LOG_NDELAY, LOG_USER);
     syslog(LOG_INFO, "%s", safe_message);
     closelog();
     
@@ -903,7 +903,7 @@ static void safeLogMessage(const char *format, ...) {
     pid_t pid = fork();
     if (pid == 0) {
         // Child process
-        char *logger_args[] = {"/usr/bin/logger", "-t", "bgwarp", safe_message, NULL};
+        char *logger_args[] = {"/usr/bin/logger", "-t", "unwarp", safe_message, NULL};
         execve("/usr/bin/logger", logger_args, NULL);
         _exit(1); // Exit if execve fails
     } else if (pid > 0) {
@@ -1142,7 +1142,7 @@ int main(int argc, const char * argv[]) {
             // Create launchd plist for recovery
             char plistPath[256];
             char plistTemplate[256];
-            snprintf(plistTemplate, sizeof(plistTemplate), "/tmp/com.bgwarp.recovery.%d.XXXXXX.plist", getpid());
+            snprintf(plistTemplate, sizeof(plistTemplate), "/tmp/com.unwarp.recovery.%d.XXXXXX.plist", getpid());
             
             // Create temporary file securely
             int fd = mkstemps(plistTemplate, 6); // 6 for ".plist" suffix
@@ -1171,12 +1171,12 @@ int main(int argc, const char * argv[]) {
             fprintf(plist, "<plist version=\"1.0\">\n");
             fprintf(plist, "<dict>\n");
             fprintf(plist, "    <key>Label</key>\n");
-            fprintf(plist, "    <string>com.bgwarp.recovery.%d</string>\n", getpid());
+            fprintf(plist, "    <string>com.unwarp.recovery.%d</string>\n", getpid());
             fprintf(plist, "    <key>ProgramArguments</key>\n");
             fprintf(plist, "    <array>\n");
             fprintf(plist, "        <string>/bin/sh</string>\n");
             fprintf(plist, "        <string>-c</string>\n");
-            fprintf(plist, "        <string>sleep %d; logger -t bgwarp 'Auto-recovery: starting WARP reconnect after %d seconds'; %s connect 2>&1 | logger -t bgwarp; logger -t bgwarp 'Auto-recovery: warp-cli connect returned $?'; sleep 2; open -a 'Cloudflare WARP' 2>&1 | logger -t bgwarp; logger -t bgwarp 'Auto-recovery: launched WARP GUI'; launchctl unload %s</string>\n", 
+            fprintf(plist, "        <string>sleep %d; logger -t unwarp 'Auto-recovery: starting WARP reconnect after %d seconds'; %s connect 2>&1 | logger -t unwarp; logger -t unwarp 'Auto-recovery: warp-cli connect returned $?'; sleep 2; open -a 'Cloudflare WARP' 2>&1 | logger -t unwarp; logger -t unwarp 'Auto-recovery: launched WARP GUI'; launchctl unload %s</string>\n", 
                     randomDelay, randomDelay, WARP_CLI_PATH, plistPath);
             fprintf(plist, "    </array>\n");
             fprintf(plist, "    <key>RunAtLoad</key>\n");
@@ -1195,7 +1195,7 @@ int main(int argc, const char * argv[]) {
             safeLogMessage("Auto-recovery scheduled: base=%ds, actual=%ds (%dh %dm %ds), pid=%d", 
                           reconnectBaseSeconds, randomDelay, hours, minutes, seconds, getpid());
             
-            printf("    LaunchD job: com.bgwarp.recovery.%d\n", getpid());
+            printf("    LaunchD job: com.unwarp.recovery.%d\n", getpid());
             printf("    Plist location: %s\n", plistPath);
             } // End of auto-recovery enabled block
         } else {

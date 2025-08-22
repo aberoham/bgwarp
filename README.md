@@ -1,10 +1,10 @@
-# bgwarp - "Break Glass WARP"
+# unwarp
 
 Emergency disconnect tool for Cloudflare WARP on macOS. Enables privileged incident responders to forcefully disconnect WARP during outages when the control and/or data plane are unresponsive.
 
-## What running bgwarp does
+## What running unwarp does
 
-After interactive local authentication, `bgwarp` immediately disconnects WARP by executing these commands:
+After interactive local authentication, `unwarp` immediately disconnects WARP by executing these commands:
 
 ```bash
 warp-cli disconnect
@@ -15,7 +15,7 @@ dscacheutil -flushcache
 route -n flush
 killall -HUP mDNSResponder
 ```
-After disconnection, `bgwarp` further schedules an automatic WARP service reconnection to occur in a few hours, hopefully after the precipitating incident has been resolved. The reconnect timeout includes a randomised offset to avoid mass simultaneous reconnections across all users.
+After disconnection, `unwarp` further schedules an automatic WARP service reconnection to occur in a few hours, hopefully after the precipitating incident has been resolved. The reconnect timeout includes a randomised offset to avoid mass simultaneous reconnections across all users.
 
 ## ⚠️ Important Notice
 
@@ -39,7 +39,7 @@ This tool is designed for advanced incident responders with physical device acce
 
 ## Architecture Support
 
-`bgwarp` is distributed as a universal binary that runs natively on:
+`unwarp` is distributed as a universal binary that runs natively on:
 - Intel-based Macs (x86_64)
 - Apple Silicon Macs (arm64/M1/M2/M3)
 
@@ -58,8 +58,8 @@ Prerequisites:
 
 ```bash
 # Clone the repository
-git clone https://github.com/aberoham/bgwarp.git
-cd bgwarp
+git clone https://github.com/aberoham/unwarp.git
+cd unwarp
 
 # Build the tool
 ./build.sh
@@ -68,14 +68,14 @@ cd bgwarp
 sudo ./install.sh
 ```
 
-`bgwarp` will be installed to `/usr/local/libexec/.bgwarp` with setuid root permissions.
+`unwarp` will be installed to `/usr/local/libexec/.unwarp` with setuid root permissions.
 
 ### Method 2: Enterprise Deployment (JAMF/MDM)
 
 For organizations using JAMF Pro or similar MDM solutions:
 
-1. Download a pre-built package from the [latest release](https://github.com/aberoham/bgwarp/releases/latest):
-   - **Recommended**: `bgwarp-X.X.X.X-universal.pkg` (works on all Mac architectures)
+1. Download a pre-built package from the [latest release](https://github.com/aberoham/unwarp/releases/latest):
+   - **Recommended**: `unwarp-X.X.X.X-universal.pkg` (works on all Mac architectures)
    - Alternative: Architecture-specific packages for Intel or Apple Silicon
 
 2. Upload the package to your MDM distribution point
@@ -89,16 +89,16 @@ See [packaging/JAMF_DEPLOYMENT.md](packaging/JAMF_DEPLOYMENT.md) for detailed JA
 ### Test Mode (Default)
 ```bash
 # Test mode (default) - preview without disconnecting
-/usr/local/libexec/.bgwarp
+/usr/local/libexec/.unwarp
 ```
 
 ### Live Incident Mode
 ```bash
 # Execute during an actual incident
-/usr/local/libexec/.bgwarp --liveincident
+/usr/local/libexec/.unwarp --liveincident
 
 # With custom reconnection time (5 minutes)
-/usr/local/libexec/.bgwarp --liveincident --reconnect 300
+/usr/local/libexec/.unwarp --liveincident --reconnect 300
 ```
 
 ### Options
@@ -109,23 +109,23 @@ See [packaging/JAMF_DEPLOYMENT.md](packaging/JAMF_DEPLOYMENT.md) for detailed JA
 
 ## Debugging
 
-View bgwarp logs:
+View unwarp logs:
 ```bash
-log show --predicate 'process == "logger" AND eventMessage CONTAINS "bgwarp"' --last 1h
+log show --predicate 'process == "logger" AND eventMessage CONTAINS "unwarp"' --last 1h
 ```
 
 List active recovery jobs:
 ```bash
-launchctl list | grep bgwarp.recovery
+launchctl list | grep unwarp.recovery
 ```
 
 Check binary architecture:
 ```bash
 # Check installed binary
-lipo -info /usr/local/libexec/.bgwarp
+lipo -info /usr/local/libexec/.unwarp
 
 # Check version and architecture
-/usr/local/libexec/.bgwarp --version
+/usr/local/libexec/.unwarp --version
 ```
 
 ## Contributing
@@ -142,7 +142,7 @@ use clear commit messages and submit a PR.
 
 ## Security
 
-As a tool to forcefully remove a control while operating as a privileged user, `bgwarp` has significant security implications.
+As a tool to forcefully remove a control while operating as a privileged user, `unwarp` has significant security implications.
 
 - **Setuid binary**: Only runs with root privileges when absolutely needed
 - **Touch ID requirement**: Attempts to ensure physical presence

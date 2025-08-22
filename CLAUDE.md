@@ -1,7 +1,7 @@
-# CLAUDE.md - Project Context for bgwarp
+# CLAUDE.md - Project Context for unwarp
 
 ## Project Overview
-bgwarp (break glass WARP) is an emergency tool for macOS that allows IT administrators to forcefully disconnect Cloudflare WARP during outages when the dashboard is inaccessible. It uses Touch ID authentication and setuid privileges for secure operation. A sample, unfinished Windows port exits within the subdirectory windows-port-sample/.
+unwarp is an emergency tool for macOS that allows IT administrators to forcefully disconnect Cloudflare WARP during outages when the dashboard is inaccessible. It uses Touch ID authentication and setuid privileges for secure operation. A sample, unfinished Windows port exits within the subdirectory windows-port-sample/.
 
 ## Key Design Principles
 
@@ -12,14 +12,14 @@ bgwarp (break glass WARP) is an emergency tool for macOS that allows IT administ
 
 ### 2. Security Architecture
 - **Setuid binary**: Installed with root:wheel ownership and 4755 permissions
-- **Hidden location**: Installed at `/usr/local/libexec/.bgwarp` (note the dot prefix)
+- **Hidden location**: Installed at `/usr/local/libexec/.unwarp` (note the dot prefix)
 - **LocalAuthentication framework**: Uses macOS native Touch ID with local password fallback
 - **Audit logging**: All operations logged to system logs via `logger` command
 
 ### 3. Naming Conventions
-- **Binary name**: `bgwarp` - short, ambiguous name (could mean "background" or "break glass")
-- **Log tag**: Use `bgwarp` for all logger calls
-- **Recovery jobs**: Named as `com.bgwarp.recovery.{PID}` for uniqueness
+- **Binary name**: `unwarp` - short name for emergency WARP disconnect
+- **Log tag**: Use `unwarp` for all logger calls
+- **Recovery jobs**: Named as `com.unwarp.recovery.{PID}` for uniqueness
 
 ## Code Style Guidelines
 
@@ -41,8 +41,8 @@ clang -framework Foundation \
       -Wno-gnu-statement-expression \
       -Wno-poison-system-directories \
       -Wno-declaration-after-statement \
-      -o bgwarp \
-      bgwarp.m
+      -o unwarp \
+      unwarp.m
 ```
 
 ### Error Handling Philosophy
@@ -89,22 +89,22 @@ static int executeCommand(const char *command, char *output, size_t outputSize) 
 ### Build and Test
 ```bash
 ./build.sh                          # Compile the tool
-./bgwarp                           # Test without setuid (will fail)
+./unwarp                           # Test without setuid (will fail)
 sudo ./install.sh                  # Install with proper permissions
-/usr/local/libexec/.bgwarp         # Run in test mode (default)
-/usr/local/libexec/.bgwarp --liveincident  # Live mode (destructive)
+/usr/local/libexec/.unwarp         # Run in test mode (default)
+/usr/local/libexec/.unwarp --liveincident  # Live mode (destructive)
 ```
 
 ### Verification
 ```bash
 # Check logs
-log show --predicate 'subsystem == "bgwarp"' --last 1h
+log show --predicate 'subsystem == "unwarp"' --last 1h
 
 # List recovery jobs
-launchctl list | grep bgwarp.recovery
+launchctl list | grep unwarp.recovery
 
 # Manual recovery disable
-launchctl unload /tmp/com.bgwarp.recovery.*.plist
+launchctl unload /tmp/com.unwarp.recovery.*.plist
 ```
 
 ## Important Notes
@@ -112,7 +112,7 @@ launchctl unload /tmp/com.bgwarp.recovery.*.plist
 1. **Never create files proactively** - especially documentation or README files
 2. **Maintain existing code style** - this project uses specific formatting for banners and output
 3. **Test mode is default** - this prevents accidental execution
-4. **Hidden installation** - the dot prefix in `.bgwarp` is intentional for security by obscurity
+4. **Hidden installation** - the dot prefix in `.unwarp` is intentional for security by obscurity
 
 ## Future Considerations
 

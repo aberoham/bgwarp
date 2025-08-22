@@ -11,16 +11,16 @@ using Microsoft.Win32;
 using System.Management;
 using System.Runtime.InteropServices;
 
-namespace Bgwarp.Windows
+namespace Unwarp.Windows
 {
     /// <summary>
-    /// Windows Service implementation of bgwarp
+    /// Windows Service implementation of unwarp
     /// Runs as SYSTEM and handles privileged WARP disconnection operations
     /// </summary>
-    public partial class BgwarpService : ServiceBase
+    public partial class UnwarpService : ServiceBase
     {
-        private const string PIPE_NAME = "BgwarpServicePipe";
-        private const string EVENT_LOG_SOURCE = "bgwarp";
+        private const string PIPE_NAME = "UnwarpServicePipe";
+        private const string EVENT_LOG_SOURCE = "unwarp";
         private const string WARP_CLI_PATH = @"C:\Program Files\Cloudflare\Cloudflare WARP\warp-cli.exe";
         
         private EventLog _eventLog;
@@ -28,30 +28,30 @@ namespace Bgwarp.Windows
         private bool _stopping = false;
         private readonly Random _random = new Random();
 
-        public BgwarpService()
+        public UnwarpService()
         {
-            ServiceName = "BgwarpEmergencyService";
+            ServiceName = "UnwarpEmergencyService";
             InitializeEventLog();
         }
 
         protected override void OnStart(string[] args)
         {
-            LogMessage("Bgwarp service starting...");
+            LogMessage("Unwarp service starting...");
             
             // Start named pipe server on background thread
             _pipeServerThread = new Thread(PipeServerLoop)
             {
                 IsBackground = true,
-                Name = "BgwarpPipeServer"
+                Name = "UnwarpPipeServer"
             };
             _pipeServerThread.Start();
             
-            LogMessage("Bgwarp service started successfully");
+            LogMessage("Unwarp service started successfully");
         }
 
         protected override void OnStop()
         {
-            LogMessage("Bgwarp service stopping...");
+            LogMessage("Unwarp service stopping...");
             _stopping = true;
             
             // Wait for pipe server to stop
@@ -60,7 +60,7 @@ namespace Bgwarp.Windows
                 _pipeServerThread.Join(5000);
             }
             
-            LogMessage("Bgwarp service stopped");
+            LogMessage("Unwarp service stopped");
         }
 
         private void InitializeEventLog()
@@ -359,7 +359,7 @@ namespace Bgwarp.Windows
         {
             try
             {
-                using (var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\bgwarp"))
+                using (var key = Registry.LocalMachine.OpenSubKey(@"SOFTWARE\unwarp"))
                 {
                     if (key != null)
                     {
@@ -387,11 +387,11 @@ namespace Bgwarp.Windows
             try
             {
                 // Create scheduled task for reconnection
-                var taskName = $"BgwarpRecovery_{Process.GetCurrentProcess().Id}_{DateTime.Now.Ticks}";
+                var taskName = $"UnwarpRecovery_{Process.GetCurrentProcess().Id}_{DateTime.Now.Ticks}";
                 var xml = $@"<?xml version=""1.0"" encoding=""UTF-16""?>
 <Task version=""1.2"" xmlns=""http://schemas.microsoft.com/windows/2004/02/mit/task"">
   <RegistrationInfo>
-    <Description>Bgwarp auto-recovery task - reconnects WARP after emergency disconnect</Description>
+    <Description>Unwarp auto-recovery task - reconnects WARP after emergency disconnect</Description>
   </RegistrationInfo>
   <Triggers>
     <TimeTrigger>

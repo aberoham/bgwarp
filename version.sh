@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Version management script for bgwarp
+# Version management script for unwarp
 # Handles version bumping and tagging following YYYY.M.BUILD.PATCH pattern
 #
 
@@ -114,7 +114,7 @@ $(git log --oneline --no-merges $(git describe --tags --abbrev=0 2>/dev/null || 
 
 # Main script logic
 main() {
-    echo -e "${BLUE}bgwarp Version Management${NC}"
+    echo -e "${BLUE}unwarp Version Management${NC}"
     echo ""
     
     # Check if we're in a git repository

@@ -1,17 +1,17 @@
-# Windows Port Sample for bgwarp
+# Windows Port Sample for unwarp
 
-This directory contains sample C# code demonstrating how bgwarp could be ported to Windows. The implementation consists of two main components:
+This directory contains sample C# code demonstrating how unwarp could be ported to Windows. The implementation consists of two main components:
 
 ## Architecture Overview
 
-### 1. BgwarpService.cs
+### 1. UnwarpService.cs
 A Windows Service that runs with SYSTEM privileges and handles the actual WARP disconnection operations. Key features:
 - Runs continuously in the background
 - Listens on a named pipe for commands
 - Handles privileged operations (process termination, network reset)
 - Implements auto-recovery scheduling via Task Scheduler
 
-### 2. BgwarpClient.cs
+### 2. UnwarpClient.cs
 A command-line client application that users run to trigger emergency disconnect. Key features:
 - Handles Windows Hello authentication
 - Enforces console-only access (no remote sessions)
@@ -63,38 +63,38 @@ A command-line client application that users run to trigger emergency disconnect
 ### Build Commands
 ```powershell
 # Build the service
-dotnet build BgwarpService.cs -o bin\Service
+dotnet build UnwarpService.cs -o bin\Service
 
 # Build the client
-dotnet build BgwarpClient.cs -o bin\Client
+dotnet build UnwarpClient.cs -o bin\Client
 ```
 
 ### Installation
 ```powershell
 # Install the service
-sc create BgwarpEmergencyService binPath= "C:\Path\To\BgwarpService.exe"
-sc config BgwarpEmergencyService start= auto
-sc start BgwarpEmergencyService
+sc create UnwarpEmergencyService binPath= "C:\Path\To\UnwarpService.exe"
+sc config UnwarpEmergencyService start= auto
+sc start UnwarpEmergencyService
 
 # Copy client to system directory
-copy bin\Client\bgwarp.exe C:\Windows\System32\
+copy bin\Client\unwarp.exe C:\Windows\System32\
 ```
 
 ## Usage
 
 ### Test Mode (default)
 ```cmd
-bgwarp.exe
+unwarp.exe
 ```
 
 ### Live Mode
 ```cmd
-bgwarp.exe --liveincident
+unwarp.exe --liveincident
 ```
 
 ### Custom Reconnect Time
 ```cmd
-bgwarp.exe --liveincident --reconnect 300
+unwarp.exe --liveincident --reconnect 300
 ```
 
 ## Limitations of This Sample

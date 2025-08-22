@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# Build script for creating bgwarp PKG installer
+# Build script for creating unwarp PKG installer
 # This creates a macOS installer package suitable for JAMF deployment
 #
 
@@ -22,22 +22,22 @@ fi
 
 # Package identifier using GitHub username/repo convention
 # Organizations can override this when building their own packages
-IDENTIFIER="com.github.aberoham.bgwarp"
-PACKAGE_NAME="bgwarp-${VERSION}.pkg"
-SIGNED_PACKAGE_NAME="bgwarp-${VERSION}-signed.pkg"
+IDENTIFIER="com.github.aberoham.unwarp"
+PACKAGE_NAME="unwarp-${VERSION}.pkg"
+SIGNED_PACKAGE_NAME="unwarp-${VERSION}-signed.pkg"
 
-echo -e "${GREEN}Building bgwarp PKG installer v${VERSION}${NC}"
+echo -e "${GREEN}Building unwarp PKG installer v${VERSION}${NC}"
 echo ""
 
 # Check if we're in the right directory
-if [ ! -f "bgwarp.m" ]; then
-    echo -e "${RED}Error: bgwarp.m not found!${NC}"
-    echo "Please run this script from the bgwarp source directory"
+if [ ! -f "unwarp.m" ]; then
+    echo -e "${RED}Error: unwarp.m not found!${NC}"
+    echo "Please run this script from the unwarp source directory"
     exit 1
 fi
 
 # Build the binary first if it doesn't exist
-if [ ! -f "bgwarp" ]; then
+if [ ! -f "unwarp" ]; then
     echo -e "${YELLOW}Binary not found, building...${NC}"
     ./build.sh "$VERSION"
     if [ $? -ne 0 ]; then
@@ -47,14 +47,14 @@ if [ ! -f "bgwarp" ]; then
 fi
 
 # Verify the binary was built
-if [ ! -f "bgwarp" ]; then
-    echo -e "${RED}Error: bgwarp binary still not found after build!${NC}"
+if [ ! -f "unwarp" ]; then
+    echo -e "${RED}Error: unwarp binary still not found after build!${NC}"
     exit 1
 fi
 
 # Copy binary to payload directory
 echo "Preparing package payload..."
-cp bgwarp packaging/payload/usr/local/libexec/.bgwarp
+cp unwarp packaging/payload/usr/local/libexec/.unwarp
 
 # Create the package
 echo "Building package..."
@@ -126,4 +126,4 @@ echo ""
 echo "For JAMF deployment instructions, see: packaging/JAMF_DEPLOYMENT.md"
 
 # Clean up the payload directory (but keep the structure)
-rm -f packaging/payload/usr/local/libexec/.bgwarp
+rm -f packaging/payload/usr/local/libexec/.unwarp

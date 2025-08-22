@@ -1,8 +1,8 @@
-# bgwarp Versioning Strategy
+# unwarp Versioning Strategy
 
 ## Version Format
 
-bgwarp uses a date-based versioning scheme similar to Cloudflare WARP:
+unwarp uses a date-based versioning scheme similar to Cloudflare WARP:
 
 ```
 YYYY.M.BUILD.PATCH
@@ -120,8 +120,8 @@ For testing packages locally:
 ## Version in Code
 
 The version is embedded in the binary at compile time:
-- Defined via `-DBGWARP_VERSION` compiler flag
-- Accessible via `bgwarp --version` command
+- Defined via `-DUNWARP_VERSION` compiler flag
+- Accessible via `unwarp --version` command
 - Shows both version and architecture (x86_64 or arm64)
 
 Version sources:
