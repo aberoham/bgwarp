@@ -128,6 +128,29 @@ lipo -info /usr/local/libexec/.unwarp
 /usr/local/libexec/.unwarp --version
 ```
 
+## Testing
+
+Test suite in `testing/` validates unwarp without requiring root or WARP disconnection.
+
+```bash
+cd testing
+make test              # Run all tests
+make test-quick        # Skip optional tests
+make test-unit         # Unit tests only
+make test-security     # Security tests only
+make clean             # Clean artifacts
+```
+
+Tests cover:
+- Command parsing and validation
+- Security and permission checks  
+- Mock WARP disconnection flows
+- Network recovery sequences
+
+See [testing/README.md](testing/README.md) for details.
+
+Note: GitHub Actions has limited test coverage (no setuid, Touch ID, or WARP).
+
 ## Contributing
 
 We welcome all feedback and contributions. Please fork the repo, create a feature branch (`git checkout -b feature/improvement`), 
@@ -139,6 +162,7 @@ use clear commit messages and submit a PR.
 - Test thoroughly in test mode and consider including anonymised logs in the PR thread to help speed up evaluation
 - Document any new command-line options following the existing convention of in-situ `--help`
 - Follow existing code style and conventions, beware of AI slop
+- Run the test suite before submitting PRs (`cd testing && make test`)
 
 ## Security
 
