@@ -32,7 +32,7 @@ on:
 jobs:
   test:
     name: Run Tests
-    runs-on: macos-latest
+    runs-on: macos-15
     
     steps:
     - name: Checkout code
@@ -106,10 +106,8 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: test-results
-        path: |
-          testing/output/*.log
-          testing/output/*.out
-          testing/output/*.err
+        path: testing/output/
+        if-no-files-found: ignore
         retention-days: 7
     
     - name: Clean up
@@ -120,7 +118,7 @@ jobs:
 
   build-production:
     name: Build Production Binary
-    runs-on: macos-latest
+    runs-on: macos-15
     needs: test
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     
