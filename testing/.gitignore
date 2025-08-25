@@ -1,0 +1,33 @@
+# Test harness generated directories and files
+
+# Test binaries
+bin/
+*.test
+unwarp_test
+
+# Test output and logs
+output/
+*.log
+*.out
+*.err
+
+# Mock commands
+mocks/
+
+# Temporary test files
+*.tmp
+*.plist
+.DS_Store
+
+# Coverage reports
+coverage/
+*.gcov
+*.gcda
+*.gcno
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~

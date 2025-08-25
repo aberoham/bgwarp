@@ -1,0 +1,159 @@
+name: Test Suite
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'unwarp.m'
+      - 'build.sh'
+      - 'testing/**'
+      - '.github/workflows/test.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'unwarp.m'
+      - 'build.sh'
+      - 'testing/**'
+      - '.github/workflows/test.yml'
+  workflow_dispatch:
+    inputs:
+      test_suite:
+        description: 'Test suite to run'
+        required: false
+        default: 'all'
+        type: choice
+        options:
+          - all
+          - unit
+          - security
+          - integration
+          - quick
+
+jobs:
+  test:
+    name: Run Tests
+    runs-on: macos-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: System information
+      run: |
+        echo "macOS version:"
+        sw_vers
+        echo ""
+        echo "Xcode version:"
+        xcodebuild -version
+        echo ""
+        echo "Clang version:"
+        clang --version
+        echo ""
+        echo "Available frameworks:"
+        ls -la /System/Library/Frameworks/ | grep -E "(Foundation|Security|LocalAuthentication)"
+    
+    - name: Run system checks
+      run: |
+        cd testing
+        chmod +x system_checks.sh
+        ./system_checks.sh || true
+        echo ""
+        echo "System check results:"
+        if [ -f output/system_check_results.sh ]; then
+          cat output/system_check_results.sh
+        fi
+      continue-on-error: true
+    
+    - name: Build test binary
+      run: |
+        cd testing
+        make build
+        echo ""
+        echo "Test binary info:"
+        file bin/unwarp_test
+        otool -L bin/unwarp_test | head -20
+    
+    - name: Run unit tests
+      if: ${{ github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'unit' || github.event.inputs.test_suite == 'quick' }}
+      run: |
+        cd testing
+        make test-unit
+      continue-on-error: false
+    
+    - name: Run security tests
+      if: ${{ github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'security' || github.event.inputs.test_suite == 'quick' }}
+      run: |
+        cd testing
+        make test-security
+      continue-on-error: false
+    
+    - name: Run integration tests
+      if: ${{ github.event.inputs.test_suite == 'all' || github.event.inputs.test_suite == 'integration' || github.event.inputs.test_suite == 'quick' }}
+      run: |
+        cd testing
+        make test-integration
+      continue-on-error: false
+    
+    # Note: Acceptance tests are skipped in CI as they require user interaction
+    - name: Note about acceptance tests
+      if: ${{ github.event.inputs.test_suite == 'all' }}
+      run: |
+        echo "ℹ️  Acceptance tests skipped in CI (require user interaction)"
+        echo "Run 'make test-acceptance' locally for manual testing"
+    
+    - name: Upload test artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: test-results
+        path: |
+          testing/output/*.log
+          testing/output/*.out
+          testing/output/*.err
+        retention-days: 7
+    
+    - name: Clean up
+      if: always()
+      run: |
+        cd testing
+        make clean
+
+  build-production:
+    name: Build Production Binary
+    runs-on: macos-latest
+    needs: test
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+    
+    - name: Build production binary
+      run: |
+        ./build.sh
+        echo ""
+        echo "Binary info:"
+        file unwarp
+        otool -L unwarp | head -20
+        ./unwarp --version
+    
+    - name: Check binary security
+      run: |
+        echo "Checking binary security features:"
+        echo ""
+        echo "Code signing:"
+        codesign -v unwarp 2>&1 || echo "Not signed (expected in CI)"
+        echo ""
+        echo "Binary permissions (would be 4755 after installation):"
+        ls -la unwarp
+        echo ""
+        echo "Hardened runtime check:"
+        codesign -d --entitlements - unwarp 2>&1 || echo "No entitlements"
+    
+    - name: Note about installation
+      run: |
+        echo "⚠️  Production binary built successfully"
+        echo "Installation requires manual steps:"
+        echo "  sudo cp unwarp /usr/local/libexec/.unwarp"
+        echo "  sudo chown root:wheel /usr/local/libexec/.unwarp"
+        echo "  sudo chmod 4755 /usr/local/libexec/.unwarp"
